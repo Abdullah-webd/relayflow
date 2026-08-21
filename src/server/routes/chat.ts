@@ -1,0 +1,122 @@
+import type { FastifyInstance } from "fastify";
+import { z } from "zod";
+import { chats, chatMessages, users } from "../db";
+import { uid } from "../lib/crypto";
+import { requireAuth } from "../auth/context";
+import { streamRun } from "../agent/agent";
+import { sendToPlatform } from "../connectors/manager";
+import type { Platform } from "../db";
+
+export async function chatRoutes(app: FastifyInstance) {
+  app.get("/chats", { preHandler: requireAuth }, async (req) => {
+    const rows = await chats().find({ userId: req.userId! }).sort({ updatedAt: -1 }).limit(100).toArray();
+    return { chats: rows.map((c) => ({ id: c._id, title: c.title, updatedAt: c.updatedAt })) };
+  });
+
+  app.post("/chats", { preHandler: requireAuth }, async (req) => {
+    const now = new Date();
+    const chat = { _id: uid(), userId: req.userId!, title: "New chat", lastResponseId: null, createdAt: now, updatedAt: now };
+    await chats().insertOne(chat);
+    return { chat: { id: chat._id, title: chat.title, updatedAt: chat.updatedAt } };
+  });
+
+  app.get("/chats/:id", { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const chat = await chats().findOne({ _id: id, userId: req.userId! });
+    if (!chat) return reply.code(404).send({ error: "not_found" });
+    const messages = await chatMessages().find({ chatId: id }).sort({ createdAt: 1 }).toArray();
+    return {
+      chat: { id: chat._id, title: chat.title },
+      messages: messages.map((m) => ({ id: m._id, role: m.role, content: m.content, toolResults: m.toolResults ?? [], createdAt: m.createdAt })),
+    };
+  });
+
+  app.patch("/chats/:id", { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({ title: z.string().min(1).max(120) }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: "invalid_input" });
+    await chats().updateOne({ _id: id, userId: req.userId! }, { $set: { title: body.data.title, updatedAt: new Date() } });
+    return { status: "ok" };
+  });
+
+  app.delete("/chats/:id", { preHandler: requireAuth }, async (req) => {
+    const { id } = req.params as { id: string };
+    await chats().deleteOne({ _id: id, userId: req.userId! });
+    await chatMessages().deleteMany({ chatId: id, userId: req.userId! });
+    return { status: "ok" };
+  });
+
+  app.post("/chats/:id/stream", { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({ message: z.string().min(1).max(8000) }).safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: "invalid_input" });
+    const userId = req.userId!;
+    const chat = await chats().findOne({ _id: id, userId });
+    if (!chat) return reply.code(404).send({ error: "not_found" });
+
+    const message = body.data.message.trim();
+    const now = new Date();
+    await chatMessages().insertOne({ _id: uid(), chatId: id, userId, role: "user", content: message, createdAt: now });
+    if (chat.title === "New chat") {
+      await chats().updateOne({ _id: id }, { $set: { title: message.slice(0, 60) } });
+    }
+
+    reply.hijack();
+    reply.raw.writeHead(200, { "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache", Connection: "keep-alive" });
+    const write = (obj: unknown) => reply.raw.write(JSON.stringify(obj) + "\n");
+
+    const user = await users().findOne({ _id: userId });
+    let finalText = "";
+    let responseId: string | null = chat.lastResponseId;
+    let toolResults: unknown[] = [];
+    try {
+      for await (const ev of streamRun(userId, message, chat.lastResponseId, user?.timezone || "UTC")) {
+        if (ev.type === "activity") write({ type: "activity", phase: ev.phase, label: ev.label });
+        else if (ev.type === "final") {
+          finalText = ev.text;
+          responseId = ev.responseId;
+          toolResults = ev.toolResults;
+        }
+      }
+      for (let i = 0; i < finalText.length; i += 120) write({ type: "text_delta", delta: finalText.slice(i, i + 120) });
+      await chatMessages().insertOne({ _id: uid(), chatId: id, userId, role: "assistant", content: finalText, toolResults, createdAt: new Date() });
+      await chats().updateOne({ _id: id }, { $set: { lastResponseId: responseId, updatedAt: new Date() } });
+      write({ type: "completed", toolResults });
+    } catch (error) {
+      console.error("[chat.stream]", (error as Error).message);
+      write({ type: "error", detail: "The agent could not complete this request. Please try again." });
+    }
+    reply.raw.end();
+  });
+
+  app.post("/chats/:id/confirm-send", { preHandler: requireAuth }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = z
+      .object({ content: z.string().min(1).max(8000), platforms: z.array(z.enum(["whatsapp", "telegram", "slack", "gmail"])).min(1) })
+      .safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: "invalid_input" });
+    const userId = req.userId!;
+    const chat = await chats().findOne({ _id: id, userId });
+    if (!chat) return reply.code(404).send({ error: "not_found" });
+
+    const results = [];
+    for (const platform of body.data.platforms as Platform[]) {
+      const r = await sendToPlatform(userId, platform, body.data.content);
+      results.push(...r);
+    }
+    const summary = results
+      .map((r) => `${r.platform}${r.ok ? " ✓" : ` ✗ (${r.error})`}`)
+      .join(", ");
+    await chatMessages().insertOne({
+      _id: uid(),
+      chatId: id,
+      userId,
+      role: "assistant",
+      content: `**Sent.** ${summary}`,
+      toolResults: [{ name: "send", result: { status: "done", results } }],
+      createdAt: new Date(),
+    });
+    await chats().updateOne({ _id: id }, { $set: { updatedAt: new Date() } });
+    return { results };
+  });
+}
