@@ -84,7 +84,8 @@ const features = [
 ];
 
 // Real customers from the original RelayFlow site.
-const customers = [
+type Customer = { name: string; href?: string; logo?: string; wordmark?: boolean; context: string; result: string; outcome: string };
+const customers: Customer[] = [
   {
     name: "Graph",
     href: "https://graph.finance",
@@ -95,7 +96,7 @@ const customers = [
   },
   {
     name: "ScalePad",
-    href: "https://www.scalepad.com",
+    // No href — ScalePad doesn't have a public site yet, so this card is not clickable.
     wordmark: true,
     context: "The MSP operating platform",
     result: "20×",
@@ -171,14 +172,9 @@ const marqueeCss = `
 }
 `;
 
-function CustomerCard({ c }: { c: (typeof customers)[number] }) {
-  return (
-    <a
-      href={c.href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="card p-6 sm:p-7 w-[340px] sm:w-[440px] shrink-0 flex flex-col hover:-translate-y-1 hover:shadow-pop transition"
-    >
+function CustomerCard({ c }: { c: Customer }) {
+  const inner = (
+    <>
       <div className="flex items-center justify-between gap-4 pb-4 border-b border-line min-h-[52px]">
         {c.wordmark ? (
           <span className="text-[26px] font-extrabold tracking-tight text-ink-900">
@@ -196,7 +192,16 @@ function CustomerCard({ c }: { c: (typeof customers)[number] }) {
         <span className="text-[15px] text-ink-600 leading-snug max-w-[230px]">{c.outcome}</span>
       </div>
       <small className="mt-auto pt-4 text-[11px] uppercase tracking-wide font-bold text-ink-400">Customer-reported outcome</small>
+    </>
+  );
+  const base = "card p-6 sm:p-7 w-[340px] sm:w-[440px] shrink-0 flex flex-col";
+  // Only cards with a real site are clickable; others render as a plain (non-link) card.
+  return c.href ? (
+    <a href={c.href} target="_blank" rel="noopener noreferrer" className={`${base} hover:-translate-y-1 hover:shadow-pop transition`}>
+      {inner}
     </a>
+  ) : (
+    <div className={base}>{inner}</div>
   );
 }
 
