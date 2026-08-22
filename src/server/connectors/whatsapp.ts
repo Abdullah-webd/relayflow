@@ -137,7 +137,7 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
     auth: state,
     logger,
     printQRInTerminal: false,
-    markOnlineOnConnect: false,
+    markOnlineOnConnect: true,
     syncFullHistory: false, // We keep only recent, live messages — never years of history.
     keepAliveIntervalMs: 20_000,
     browser: ["RelayFlow", "Chrome", "1.0.0"],
@@ -255,9 +255,10 @@ export async function sendWhatsapp(connectionId: string, destinationExternalId: 
   if (session.status !== "connected") throw new Error("WhatsApp is not connected yet — try again in a moment");
   console.info(`[whatsapp] sending to ${destinationExternalId} connection=${connectionId.slice(-8)}`);
   // Baileys sendMessage can hang if the socket is degraded; never let a send stall the request.
+  // Larger groups need more time on the first send (WhatsApp encrypts per member).
   const sent = await Promise.race([
     session.socket.sendMessage(destinationExternalId, { text }),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("WhatsApp send timed out")), 30_000)),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("WhatsApp send timed out")), 60_000)),
   ]);
   console.info(`[whatsapp] sent id=${(sent as any)?.key?.id ?? "?"}`);
   return (sent as any)?.key?.id ?? null;
