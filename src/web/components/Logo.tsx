@@ -1,8 +1,8 @@
-export function Logo({ size = 34, showText = true }: { size?: number; showText?: boolean }) {
+export function Logo({ size = 34, showText = true, byline = false }: { size?: number; showText?: boolean; byline?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2.5 font-extrabold text-ink-900 text-lg tracking-tight">
       <span
-        className="grid place-items-center rounded-xl text-white"
+        className="grid place-items-center rounded-xl text-white shrink-0"
         style={{ width: size, height: size, background: "linear-gradient(135deg,#22c1d6,#4f46e5)" }}
       >
         <svg width={size * 0.56} height={size * 0.56} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
@@ -12,7 +12,15 @@ export function Logo({ size = 34, showText = true }: { size?: number; showText?:
           <path d="M8.1 11 15.4 7.2M8.1 13l7.3 3.8" />
         </svg>
       </span>
-      {showText && <span>RelayFlow</span>}
+      {showText &&
+        (byline ? (
+          <span className="flex flex-col leading-none">
+            <span>RelayFlow</span>
+            <span className="mt-1 text-[11px] font-semibold tracking-normal text-ink-400">by Levi app</span>
+          </span>
+        ) : (
+          <span>RelayFlow</span>
+        ))}
     </span>
   );
 }

@@ -54,7 +54,7 @@ export default function AppLayout() {
       className={`${compact ? "md:w-[72px]" : "md:w-60"} w-64 h-full shrink-0 bg-white border-r border-line flex flex-col transition-[width] duration-200`}
     >
       <div className={`flex items-center h-16 px-4 ${compact ? "md:justify-center justify-between" : "justify-between"}`}>
-        {(!compact || mobileOpen) && <Logo />}
+        {(!compact || mobileOpen) && <Logo byline />}
         {/* Desktop collapse toggle */}
         <button
           onClick={toggle}
