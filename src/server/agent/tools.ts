@@ -1,4 +1,4 @@
-import { getRecentMessages, listUserConnections } from "../connectors/manager";
+import { getRecentMessages, listUserConnections, listDestinations, resolveSendTargets } from "../connectors/manager";
 import type { Platform } from "../db";
 
 export interface ToolDef {
@@ -28,21 +28,43 @@ export const tools: ToolDef[] = [
     },
   },
   {
-    name: "get_recent_messages",
+    name: "list_destinations",
     description:
-      "Read a small, recent slice of messages from the user's connected channels (their selected groups/channels). Use this to answer questions like 'what are the last messages on WhatsApp' or 'summarize what's been discussed'. Only recent messages are available (roughly the last week), never full history.",
+      "List the actual groups/channels the user has on their connected platforms, by NAME (e.g. WhatsApp groups). Use this to answer 'list my groups', 'do you know the X group', or to find a specific group before reading it or sending to it.",
     parameters: {
       type: "object",
       properties: {
-        platform: { type: ["string", "null"], enum: [...PLATFORMS, null], description: "Limit to one platform, or null for all connected channels." },
-        limit: { type: "integer", minimum: 1, maximum: 30, description: "How many recent messages to return." },
+        platform: { type: ["string", "null"], enum: [...PLATFORMS, null], description: "Limit to one platform, or null for all." },
       },
-      required: ["platform", "limit"],
+      required: ["platform"],
       additionalProperties: false,
     },
     handler: async (userId, args) => {
       const platform = args.platform && PLATFORMS.includes(args.platform) ? (args.platform as Platform) : undefined;
-      const messages = await getRecentMessages(userId, { platform, limit: args.limit ?? 15 });
+      const dests = await listDestinations(userId, platform);
+      return {
+        count: dests.length,
+        destinations: dests.map((d) => ({ platform: d.platform, name: d.name, kind: d.kind, included: d.selected })),
+      };
+    },
+  },
+  {
+    name: "get_recent_messages",
+    description:
+      "Read a small, recent slice of messages from the user's connected channels. Use `group` to read a SPECIFIC group/channel by name (e.g. 'Dev Syndicate'). Only recent messages are available (roughly the last week), never full history.",
+    parameters: {
+      type: "object",
+      properties: {
+        platform: { type: ["string", "null"], enum: [...PLATFORMS, null], description: "Limit to one platform, or null for all connected channels." },
+        group: { type: ["string", "null"], description: "A specific group/channel name (or id) to read from, or null for the user's selected channels." },
+        limit: { type: "integer", minimum: 1, maximum: 30, description: "How many recent messages to return." },
+      },
+      required: ["platform", "group", "limit"],
+      additionalProperties: false,
+    },
+    handler: async (userId, args) => {
+      const platform = args.platform && PLATFORMS.includes(args.platform) ? (args.platform as Platform) : undefined;
+      const messages = await getRecentMessages(userId, { platform, group: args.group, limit: args.limit ?? 15 });
       return {
         count: messages.length,
         messages: messages.map((m) => ({
@@ -58,34 +80,31 @@ export const tools: ToolDef[] = [
   {
     name: "prepare_send",
     description:
-      "Prepare a message to send to one or more connected channels. This does NOT send — it returns a preview the user must approve first. Use 'all' to send to every connected channel. If you are unsure about the destination or content, ask the user in text instead of calling this.",
+      "Prepare a message to send. Use `group` to target a SPECIFIC group/channel by name (e.g. 'Dev Syndicate'); otherwise it goes to all the selected channels of the chosen platforms. Use platforms ['all'] to reach every connected channel. This does NOT send — it returns a preview the user must approve first. If unsure about the destination or content, ask the user in text instead of calling this.",
     parameters: {
       type: "object",
       properties: {
         platforms: {
           type: "array",
           items: { type: "string", enum: [...PLATFORMS, "all"] },
-          description: "Which channels to send to. Use ['all'] for every connected channel.",
+          description: "Which platforms to send on. Use ['all'] for every connected channel.",
         },
+        group: { type: ["string", "null"], description: "A specific group/channel name (or id) to target, or null for the selected channels of the chosen platforms." },
         content: { type: "string", description: "The exact message text to send." },
       },
-      required: ["platforms", "content"],
+      required: ["platforms", "group", "content"],
       additionalProperties: false,
     },
     handler: async (userId, args) => {
-      const views = await listUserConnections(userId);
-      const connected = views.filter((v) => v.status === "connected").map((v) => v.platform);
-      let targets: Platform[] = args.platforms.includes("all")
-        ? connected
-        : (args.platforms as Platform[]).filter((p) => PLATFORMS.includes(p));
-      targets = targets.filter((p) => connected.includes(p));
+      const targets = await resolveSendTargets(userId, args.platforms, args.group);
       return {
         status: "pending_confirmation",
         action: "send",
         content: args.content,
-        platforms: targets,
-        not_connected: (args.platforms.includes("all") ? [] : args.platforms).filter((p: string) => p !== "all" && !connected.includes(p as Platform)),
-        note: targets.length ? "Awaiting the user's approval before sending." : "None of the requested channels are connected.",
+        targets: targets.map((t) => ({ platform: t.platform, connectionId: t.connectionId, externalId: t.externalId, name: t.name })),
+        note: targets.length
+          ? `Ready to send to ${targets.length} destination${targets.length === 1 ? "" : "s"}. Awaiting the user's approval.`
+          : "No matching connected destination was found.",
       };
     },
   },

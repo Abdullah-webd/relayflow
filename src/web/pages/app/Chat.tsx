@@ -157,10 +157,10 @@ export default function Chat() {
     }
   }
 
-  async function approveSend(key: string, content: string, platforms: string[]) {
+  async function approveSend(key: string, content: string, targets: any[]) {
     setResolved((s) => new Set(s).add(key));
     try {
-      await api(`/chats/${chatId}/confirm-send`, { method: "POST", body: JSON.stringify({ content, platforms }) });
+      await api(`/chats/${chatId}/confirm-send`, { method: "POST", body: JSON.stringify({ content, targets }) });
       const { messages } = await api<{ messages: Msg[] }>(`/chats/${chatId}`);
       setMessages(messages);
     } catch {
@@ -287,7 +287,7 @@ function MessageView({
   msg: Msg;
   isLast: boolean;
   resolved: Set<string>;
-  onApproveSend: (key: string, content: string, platforms: string[]) => void;
+  onApproveSend: (key: string, content: string, targets: any[]) => void;
   onApproveSchedule: (key: string, payload: any) => void;
 }) {
   if (msg.role === "user") {
@@ -319,19 +319,21 @@ function MessageView({
           if (resolved.has(key)) return <div key={key} className="mt-3 text-sm text-emerald-600 flex items-center gap-1.5"><Check size={15} /> Approved</div>;
           const r = action.result;
           if (r.action === "send") {
+            const targets: any[] = r.targets || [];
+            const names = targets.map((t) => `${t.name} (${PLATFORM_LABEL[t.platform] || t.platform})`);
+            const toLabel =
+              targets.length === 0
+                ? "no matching destination"
+                : targets.length <= 4
+                ? names.join(", ")
+                : `${targets.length} destinations — ${names.slice(0, 3).join(", ")}…`;
             return (
               <div key={key} className="mt-3 card p-4">
                 <div className="text-sm font-semibold text-ink-900">Send this message?</div>
                 <div className="mt-2 rounded-xl bg-surface border border-line px-3 py-2.5 text-[15px] text-ink-800 whitespace-pre-wrap">{r.content}</div>
-                <div className="mt-2 text-sm text-ink-500">
-                  To: {r.platforms?.length ? r.platforms.map((p: string) => PLATFORM_LABEL[p] || p).join(", ") : "no connected channel"}
-                </div>
+                <div className="mt-2 text-sm text-ink-500">To: {toLabel}</div>
                 <div className="mt-3 flex gap-2">
-                  <button
-                    disabled={!r.platforms?.length}
-                    onClick={() => onApproveSend(key, r.content, r.platforms)}
-                    className="btn-primary h-10 px-4"
-                  >
+                  <button disabled={!targets.length} onClick={() => onApproveSend(key, r.content, targets)} className="btn-primary h-10 px-4">
                     Approve & send
                   </button>
                 </div>

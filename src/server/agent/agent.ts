@@ -8,8 +8,10 @@ const SYSTEM = `You are RelayFlow — a single AI operations agent that has 360�
 
 What you can do:
 - Answer questions about recent conversations across the user's connected channels ("what are the last messages on WhatsApp", "summarise what's been discussed on Telegram"). Only recent messages are available (about the last week) — never claim to have full history.
+- LIST the user's actual groups/channels by name — call list_destinations for "list my groups", "which groups am I in", or "do you know the X group". The group names come from list_destinations, NOT from list_connections (which only gives counts/status).
+- Read a SPECIFIC group by passing its name as \`group\` to get_recent_messages (e.g. group: "Dev Syndicate").
 - Know exactly which channels are connected vs disconnected. Call list_connections whenever channel status matters. Never assume a channel is connected.
-- Send messages on the user's behalf, including to several channels at once ("send this to WhatsApp and Telegram", "message all my channels"). You NEVER send directly — you call prepare_send to show the user an exact preview, and the user approves it before anything is sent.
+- Send messages on the user's behalf — to a specific group (pass \`group\` to prepare_send), to a whole platform, or to several channels at once ("message all my channels"). You NEVER send directly — you call prepare_send to show an exact preview, and the user approves before anything is sent.
 - Schedule tasks/reminders via prepare_schedule (also user-approved).
 
 How to behave:
@@ -24,9 +26,10 @@ export type AgentEvent =
 
 function startLabel(name: string, args: any): string {
   if (name === "list_connections") return "Checking your connected channels…";
+  if (name === "list_destinations") return "Looking up your groups & channels…";
   if (name === "get_recent_messages") {
-    const p = args?.platform ? String(args.platform) : "all channels";
-    return `Reading recent messages (${p})…`;
+    const where = args?.group ? String(args.group) : args?.platform ? String(args.platform) : "all channels";
+    return `Reading recent messages (${where})…`;
   }
   if (name === "prepare_send") return "Preparing a message to send…";
   if (name === "prepare_schedule") return "Preparing a scheduled task…";
@@ -39,6 +42,7 @@ function doneLabel(name: string, result: any): string | null {
     return `Read ${result.count} recent message${result.count === 1 ? "" : "s"}`;
   }
   if (name === "list_connections") return "Reviewed channel status";
+  if (name === "list_destinations" && typeof result?.count === "number") return `Found ${result.count} group${result.count === 1 ? "" : "s"} / channel${result.count === 1 ? "" : "s"}`;
   if (name === "prepare_send") return "Prepared a message for your approval";
   if (name === "prepare_schedule") return "Prepared a scheduled task for your approval";
   return null;

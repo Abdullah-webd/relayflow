@@ -4,7 +4,7 @@ import { chats, chatMessages, users } from "../db";
 import { uid } from "../lib/crypto";
 import { requireAuth } from "../auth/context";
 import { streamRun } from "../agent/agent";
-import { sendToPlatform } from "../connectors/manager";
+import { sendToTargets, type SendTarget } from "../connectors/manager";
 import type { Platform } from "../db";
 
 export async function chatRoutes(app: FastifyInstance) {
@@ -92,21 +92,28 @@ export async function chatRoutes(app: FastifyInstance) {
   app.post("/chats/:id/confirm-send", { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z
-      .object({ content: z.string().min(1).max(8000), platforms: z.array(z.enum(["whatsapp", "telegram", "slack", "gmail"])).min(1) })
+      .object({
+        content: z.string().min(1).max(8000),
+        targets: z
+          .array(
+            z.object({
+              platform: z.enum(["whatsapp", "telegram", "slack", "gmail"]),
+              connectionId: z.string(),
+              externalId: z.string(),
+              name: z.string(),
+            }),
+          )
+          .min(1)
+          .max(200),
+      })
       .safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input" });
     const userId = req.userId!;
     const chat = await chats().findOne({ _id: id, userId });
     if (!chat) return reply.code(404).send({ error: "not_found" });
 
-    const results = [];
-    for (const platform of body.data.platforms as Platform[]) {
-      const r = await sendToPlatform(userId, platform, body.data.content);
-      results.push(...r);
-    }
-    const summary = results
-      .map((r) => `${r.platform}${r.ok ? " ✓" : ` ✗ (${r.error})`}`)
-      .join(", ");
+    const results = await sendToTargets(userId, body.data.targets as SendTarget[], body.data.content);
+    const summary = results.map((r) => `${r.destinationName}${r.ok ? " ✓" : ` ✗ (${r.error})`}`).join(", ");
     await chatMessages().insertOne({
       _id: uid(),
       chatId: id,

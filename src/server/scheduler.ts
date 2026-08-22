@@ -1,9 +1,8 @@
 import cron from "node-cron";
 import { scheduledTasks, users, type ScheduledTask } from "./db";
 import { streamRun } from "./agent/agent";
-import { sendToPlatform } from "./connectors/manager";
+import { sendToTargets, type SendTarget } from "./connectors/manager";
 import { sendEmail } from "./lib/email";
-import type { Platform } from "./db";
 
 async function runTask(task: ScheduledTask): Promise<void> {
   const user = await users().findOne({ _id: task.userId });
@@ -26,11 +25,9 @@ async function runTask(task: ScheduledTask): Promise<void> {
   // A scheduled task is pre-approved by the user, so auto-execute any prepared sends.
   const sendSummaries: string[] = [];
   for (const tr of toolResults) {
-    if (tr?.name === "prepare_send" && tr?.result?.platforms?.length && tr?.result?.content) {
-      for (const platform of tr.result.platforms as Platform[]) {
-        const results = await sendToPlatform(task.userId, platform, tr.result.content);
-        results.forEach((r) => sendSummaries.push(`${r.platform}: ${r.ok ? "sent" : `failed (${r.error})`}`));
-      }
+    if (tr?.name === "prepare_send" && tr?.result?.targets?.length && tr?.result?.content) {
+      const results = await sendToTargets(task.userId, tr.result.targets as SendTarget[], tr.result.content);
+      results.forEach((r) => sendSummaries.push(`${r.destinationName}: ${r.ok ? "sent" : `failed (${r.error})`}`));
     }
   }
 

@@ -54,24 +54,28 @@ export async function connectedPlatforms(userId: string): Promise<Connection[]> 
 /** Pull a small, recent slice of messages across the user's selected destinations. */
 export async function getRecentMessages(
   userId: string,
-  opts: { platform?: Platform; limit?: number } = {},
+  opts: { platform?: Platform; limit?: number; group?: string | null } = {},
 ): Promise<RecentMessage[]> {
   const limit = Math.min(opts.limit ?? 15, 50);
   const query: Record<string, unknown> = { userId, status: "connected" };
   if (opts.platform) query.platform = opts.platform;
   const conns = await connections().find(query).toArray();
   const results: RecentMessage[] = [];
+  const groupQuery = opts.group?.trim().toLowerCase();
 
   for (const conn of conns) {
-    const dests = await destinations()
-      .find({ connectionId: conn._id, selected: { $ne: false } })
-      .limit(20)
-      .toArray();
+    let dests = await destinations().find({ connectionId: conn._id }).limit(300).toArray();
+    if (groupQuery) {
+      const exact = dests.filter((d) => d.externalId === opts.group);
+      dests = exact.length ? exact : dests.filter((d) => (d.name || "").toLowerCase().includes(groupQuery));
+    } else {
+      dests = dests.filter((d) => d.selected !== false).slice(0, 20);
+    }
     try {
       if (conn.platform === "whatsapp") {
         const nameById = new Map(dests.map((d) => [d.externalId, d.name]));
         const msgs = await channelMessages()
-          .find({ connectionId: conn._id })
+          .find({ connectionId: conn._id, destinationId: { $in: dests.map((d) => d.externalId) } })
           .sort({ occurredAt: -1 })
           .limit(limit)
           .toArray();
@@ -114,6 +118,62 @@ export async function getRecentMessages(
   return results.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, limit * 2);
 }
 
+export interface DestinationView {
+  platform: Platform;
+  id: string;
+  externalId: string;
+  name: string;
+  kind: string;
+  selected: boolean;
+}
+
+/** List every group/channel the user has across connected platforms, with names. */
+export async function listDestinations(userId: string, platform?: Platform): Promise<DestinationView[]> {
+  const query: Record<string, unknown> = { userId, status: "connected" };
+  if (platform) query.platform = platform;
+  const conns = await connections().find(query).toArray();
+  const out: DestinationView[] = [];
+  for (const conn of conns) {
+    const dests = await destinations().find({ connectionId: conn._id }).sort({ name: 1 }).toArray();
+    for (const d of dests) {
+      out.push({ platform: conn.platform, id: d._id, externalId: d.externalId, name: d.name, kind: d.kind, selected: d.selected !== false });
+    }
+  }
+  return out;
+}
+
+export interface SendTarget {
+  platform: Platform;
+  connectionId: string;
+  externalId: string;
+  name: string;
+}
+
+/** Resolve which concrete destinations a request maps to. `group` filters by name (fuzzy) or id. */
+export async function resolveSendTargets(userId: string, platforms: string[], group?: string | null): Promise<SendTarget[]> {
+  const connected = await connections().find({ userId, status: "connected" }).toArray();
+  const connectedSet = new Set(connected.map((c) => c.platform));
+  const targetPlatforms = platforms.includes("all")
+    ? [...connectedSet]
+    : (platforms as Platform[]).filter((p) => connectedSet.has(p));
+
+  const targets: SendTarget[] = [];
+  for (const p of targetPlatforms) {
+    const conn = connected.find((c) => c.platform === p);
+    if (!conn) continue;
+    let dests = await destinations().find({ connectionId: conn._id }).toArray();
+    if (group && group.trim()) {
+      const q = group.trim().toLowerCase();
+      const exact = dests.filter((d) => d.externalId === group);
+      dests = exact.length ? exact : dests.filter((d) => (d.name || "").toLowerCase().includes(q));
+    } else {
+      dests = dests.filter((d) => d.selected !== false);
+    }
+    for (const d of dests) targets.push({ platform: p, connectionId: conn._id, externalId: d.externalId, name: d.name });
+  }
+  return targets;
+}
+
 export interface SendResult {
   platform: Platform;
   connectionId: string;
@@ -122,79 +182,53 @@ export interface SendResult {
   error?: string;
 }
 
-/** Send `content` to every selected destination of a platform (or a specific one). */
+async function deliverOne(userId: string, t: SendTarget, content: string): Promise<SendResult> {
+  try {
+    let externalMessageId: string | null = null;
+    if (t.platform === "whatsapp") externalMessageId = await wa.sendWhatsapp(t.connectionId, t.externalId, content);
+    else if (t.platform === "telegram") externalMessageId = await tg.sendTelegram(t.connectionId, t.externalId, content);
+    else if (t.platform === "slack") externalMessageId = await slack.sendSlack(t.connectionId, t.externalId, content);
+    else if (t.platform === "gmail") externalMessageId = await gmail.sendGmail(t.connectionId, t.externalId, "Message from RelayFlow", content);
+
+    await outbound().insertOne({
+      _id: uid(), userId, platform: t.platform, connectionId: t.connectionId, destinationExternalId: t.externalId,
+      content, status: "sent", externalMessageId, error: null, createdAt: new Date(),
+    });
+    await channelMessages()
+      .insertOne({
+        _id: uid(), userId, connectionId: t.connectionId, platform: t.platform, destinationId: t.externalId,
+        destinationName: t.name, externalId: `out:${externalMessageId ?? uid()}`, senderName: "You (via RelayFlow)",
+        direction: "outbound", text: content, occurredAt: new Date(), createdAt: new Date(),
+      })
+      .catch(() => undefined);
+    return { platform: t.platform, connectionId: t.connectionId, destinationName: t.name, ok: true };
+  } catch (error) {
+    await outbound().insertOne({
+      _id: uid(), userId, platform: t.platform, connectionId: t.connectionId, destinationExternalId: t.externalId,
+      content, status: "failed", externalMessageId: null, error: (error as Error).message, createdAt: new Date(),
+    });
+    return { platform: t.platform, connectionId: t.connectionId, destinationName: t.name, ok: false, error: (error as Error).message };
+  }
+}
+
+/** Send `content` to an explicit, already-resolved list of targets. */
+export async function sendToTargets(userId: string, targets: SendTarget[], content: string): Promise<SendResult[]> {
+  const results: SendResult[] = [];
+  for (const t of targets) results.push(await deliverOne(userId, t, content));
+  return results;
+}
+
+/** Backward-compatible: send to all selected destinations of a platform (or one). */
 export async function sendToPlatform(
   userId: string,
   platform: Platform,
   content: string,
   destinationExternalId?: string,
 ): Promise<SendResult[]> {
-  const conn = await connections().findOne({ userId, platform, status: "connected" });
-  if (!conn) return [{ platform, connectionId: "", destinationName: platform, ok: false, error: "not connected" }];
-
-  let targets = await destinations().find({ connectionId: conn._id, selected: { $ne: false } }).toArray();
-  if (destinationExternalId) targets = targets.filter((d) => d.externalId === destinationExternalId);
-  if (targets.length === 0 && destinationExternalId) {
-    targets = [{ externalId: destinationExternalId, name: destinationExternalId } as any];
-  }
-  if (targets.length === 0) return [{ platform, connectionId: conn._id, destinationName: platform, ok: false, error: "no destination selected" }];
-
-  const results: SendResult[] = [];
-  for (const dest of targets) {
-    try {
-      let externalMessageId: string | null = null;
-      if (platform === "whatsapp") externalMessageId = await wa.sendWhatsapp(conn._id, dest.externalId, content);
-      else if (platform === "telegram") externalMessageId = await tg.sendTelegram(conn._id, dest.externalId, content);
-      else if (platform === "slack") externalMessageId = await slack.sendSlack(conn._id, dest.externalId, content);
-      else if (platform === "gmail") externalMessageId = await gmail.sendGmail(conn._id, dest.externalId, "Message from RelayFlow", content);
-
-      await outbound().insertOne({
-        _id: uid(),
-        userId,
-        platform,
-        connectionId: conn._id,
-        destinationExternalId: dest.externalId,
-        content,
-        status: "sent",
-        externalMessageId,
-        error: null,
-        createdAt: new Date(),
-      });
-      // Reflect the sent message in the recent-history cache so the agent sees it too.
-      await channelMessages()
-        .insertOne({
-          _id: uid(),
-          userId,
-          connectionId: conn._id,
-          platform,
-          destinationId: dest.externalId,
-          destinationName: dest.name,
-          externalId: `out:${externalMessageId ?? uid()}`,
-          senderName: "You (via RelayFlow)",
-          direction: "outbound",
-          text: content,
-          occurredAt: new Date(),
-          createdAt: new Date(),
-        })
-        .catch(() => undefined);
-      results.push({ platform, connectionId: conn._id, destinationName: dest.name, ok: true });
-    } catch (error) {
-      await outbound().insertOne({
-        _id: uid(),
-        userId,
-        platform,
-        connectionId: conn._id,
-        destinationExternalId: dest.externalId,
-        content,
-        status: "failed",
-        externalMessageId: null,
-        error: (error as Error).message,
-        createdAt: new Date(),
-      });
-      results.push({ platform, connectionId: conn._id, destinationName: dest.name, ok: false, error: (error as Error).message });
-    }
-  }
-  return results;
+  let targets = await resolveSendTargets(userId, [platform], null);
+  if (destinationExternalId) targets = targets.filter((t) => t.externalId === destinationExternalId);
+  if (targets.length === 0) return [{ platform, connectionId: "", destinationName: platform, ok: false, error: "no destination" }];
+  return sendToTargets(userId, targets, content);
 }
 
 export async function disconnectConnection(userId: string, connectionId: string): Promise<void> {
