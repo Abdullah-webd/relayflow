@@ -56,6 +56,8 @@ async function main() {
       if (req.raw.url && req.raw.url.startsWith("/api")) {
         return reply.code(404).send({ error: "not_found" });
       }
+      // Never cache the SPA shell so a new build's hashed assets are always picked up.
+      reply.header("Cache-Control", "no-store");
       return reply.sendFile("index.html");
     });
   }

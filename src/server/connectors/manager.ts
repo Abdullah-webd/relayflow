@@ -152,23 +152,34 @@ export interface SendTarget {
 /** Resolve which concrete destinations a request maps to. `group` filters by name (fuzzy) or id. */
 export async function resolveSendTargets(userId: string, platforms: string[], group?: string | null): Promise<SendTarget[]> {
   const connected = await connections().find({ userId, status: "connected" }).toArray();
-  const connectedSet = new Set(connected.map((c) => c.platform));
-  const targetPlatforms = platforms.includes("all")
-    ? [...connectedSet]
-    : (platforms as Platform[]).filter((p) => connectedSet.has(p));
-
   const targets: SendTarget[] = [];
+
+  // A named group identifies the destination on its own — find it across ALL connected
+  // platforms, regardless of which platform the model guessed in `platforms`.
+  if (group && group.trim()) {
+    const q = group.trim().toLowerCase();
+    let pool = connected;
+    if (platforms.length && !platforms.includes("all")) {
+      const wanted = new Set(platforms);
+      const narrowed = connected.filter((c) => wanted.has(c.platform));
+      if (narrowed.length) pool = narrowed; // only narrow if it still yields candidates
+    }
+    for (const conn of pool) {
+      const dests = await destinations().find({ connectionId: conn._id }).toArray();
+      const exact = dests.filter((d) => d.externalId === group);
+      const matched = exact.length ? exact : dests.filter((d) => (d.name || "").toLowerCase().includes(q));
+      for (const d of matched) targets.push({ platform: conn.platform, connectionId: conn._id, externalId: d.externalId, name: d.name });
+    }
+    return targets;
+  }
+
+  // No group: send to the selected destinations of the chosen platforms.
+  const connectedSet = new Set(connected.map((c) => c.platform));
+  const targetPlatforms = platforms.includes("all") ? [...connectedSet] : (platforms as Platform[]).filter((p) => connectedSet.has(p));
   for (const p of targetPlatforms) {
     const conn = connected.find((c) => c.platform === p);
     if (!conn) continue;
-    let dests = await destinations().find({ connectionId: conn._id }).toArray();
-    if (group && group.trim()) {
-      const q = group.trim().toLowerCase();
-      const exact = dests.filter((d) => d.externalId === group);
-      dests = exact.length ? exact : dests.filter((d) => (d.name || "").toLowerCase().includes(q));
-    } else {
-      dests = dests.filter((d) => d.selected !== false);
-    }
+    const dests = (await destinations().find({ connectionId: conn._id }).toArray()).filter((d) => d.selected !== false);
     for (const d of dests) targets.push({ platform: p, connectionId: conn._id, externalId: d.externalId, name: d.name });
   }
   return targets;
