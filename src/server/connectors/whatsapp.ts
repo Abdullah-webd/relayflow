@@ -27,16 +27,21 @@ type WaSession = {
   status: string;
   reconnectAttempts: number;
   reconnectTimer?: ReturnType<typeof setTimeout>;
+  stableTimer?: ReturnType<typeof setTimeout>;
   closing: boolean;
 };
 
 const sessions = new Map<string, WaSession>();
-const RECONNECT_BASE_MS = 1_500;
-const RECONNECT_MAX_MS = 30_000;
+// Baileys queries WhatsApp for group metadata on every group send and BLOCKS on it;
+// caching that metadata (per the Baileys docs) is what makes group sends actually return.
+const groupMetaCache = new Map<string, any>();
+const RECONNECT_BASE_MS = 3_000;
+const RECONNECT_MAX_MS = 60_000;
 
 function teardown(session: WaSession) {
   session.closing = true;
   if (session.reconnectTimer) clearTimeout(session.reconnectTimer);
+  if (session.stableTimer) clearTimeout(session.stableTimer);
   try {
     session.socket.ev.removeAllListeners("connection.update");
   } catch {
@@ -108,6 +113,7 @@ async function syncGroups(userId: string, connectionId: string, socket: WASocket
   try {
     const groups = await socket.groupFetchAllParticipating();
     for (const group of Object.values(groups)) {
+      groupMetaCache.set(group.id, group); // cache metadata so sends don't block
       await upsertDestination({
         userId,
         connectionId,
@@ -135,6 +141,9 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
     syncFullHistory: false, // We keep only recent, live messages — never years of history.
     keepAliveIntervalMs: 20_000,
     browser: ["RelayFlow", "Chrome", "1.0.0"],
+    // REQUIRED for reliable group sends — otherwise sendMessage blocks fetching metadata.
+    cachedGroupMetadata: async (jid) => groupMetaCache.get(jid),
+    getMessage: async () => undefined,
   });
   const session: WaSession = { socket, userId, status: "connecting", reconnectAttempts: attempt, closing: false };
   sessions.set(connectionId, session);
@@ -151,7 +160,13 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
     if (connection === "open") {
       session.qrDataUrl = undefined;
       session.status = "connected";
-      session.reconnectAttempts = 0;
+      // Only reset the backoff after the connection stays up for a while. Resetting
+      // immediately made a flapping connection reconnect fast and hammer WhatsApp (408).
+      if (session.stableTimer) clearTimeout(session.stableTimer);
+      session.stableTimer = setTimeout(() => {
+        session.reconnectAttempts = 0;
+      }, 60_000);
+      session.stableTimer.unref?.();
       console.info(`[whatsapp] connected connection=${connectionId.slice(-8)}`);
       await setConnectionStatus(connectionId, "connected", { lastError: null, heartbeatAt: new Date() });
       await syncGroups(userId, connectionId, socket);
@@ -204,6 +219,25 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
       });
     }
     heartbeat(connectionId).catch(() => undefined);
+  });
+
+  // Keep the group-metadata cache fresh so group sends stay fast and never block.
+  socket.ev.on("groups.update", async (updates) => {
+    for (const update of updates) {
+      if (!update.id) continue;
+      try {
+        groupMetaCache.set(update.id, await socket.groupMetadata(update.id));
+      } catch {
+        /* keep old cache */
+      }
+    }
+  });
+  socket.ev.on("group-participants.update", async (event) => {
+    try {
+      groupMetaCache.set(event.id, await socket.groupMetadata(event.id));
+    } catch {
+      /* keep old cache */
+    }
   });
 }
 
