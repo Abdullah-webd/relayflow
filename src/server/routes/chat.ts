@@ -2,25 +2,28 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { chats, chatMessages, users } from "../db";
 import { uid } from "../lib/crypto";
-import { requireAuth } from "../auth/context";
+import { requireActivePlan } from "../auth/context";
+import { env } from "../env";
+import { tryConsumeCredits } from "../billing/stripe";
+import { CREDITS_PER_MESSAGE } from "../billing/plans";
 import { streamRun, acknowledgeAction } from "../agent/agent";
 import { sendToTargets, type SendTarget } from "../connectors/manager";
 import type { Platform } from "../db";
 
 export async function chatRoutes(app: FastifyInstance) {
-  app.get("/chats", { preHandler: requireAuth }, async (req) => {
+  app.get("/chats", { preHandler: requireActivePlan }, async (req) => {
     const rows = await chats().find({ userId: req.userId! }).sort({ updatedAt: -1 }).limit(100).toArray();
     return { chats: rows.map((c) => ({ id: c._id, title: c.title, updatedAt: c.updatedAt })) };
   });
 
-  app.post("/chats", { preHandler: requireAuth }, async (req) => {
+  app.post("/chats", { preHandler: requireActivePlan }, async (req) => {
     const now = new Date();
     const chat = { _id: uid(), userId: req.userId!, title: "New chat", lastResponseId: null, createdAt: now, updatedAt: now };
     await chats().insertOne(chat);
     return { chat: { id: chat._id, title: chat.title, updatedAt: chat.updatedAt } };
   });
 
-  app.get("/chats/:id", { preHandler: requireAuth }, async (req, reply) => {
+  app.get("/chats/:id", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const chat = await chats().findOne({ _id: id, userId: req.userId! });
     if (!chat) return reply.code(404).send({ error: "not_found" });
@@ -31,7 +34,7 @@ export async function chatRoutes(app: FastifyInstance) {
     };
   });
 
-  app.patch("/chats/:id", { preHandler: requireAuth }, async (req, reply) => {
+  app.patch("/chats/:id", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z.object({ title: z.string().min(1).max(120) }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input" });
@@ -39,20 +42,28 @@ export async function chatRoutes(app: FastifyInstance) {
     return { status: "ok" };
   });
 
-  app.delete("/chats/:id", { preHandler: requireAuth }, async (req) => {
+  app.delete("/chats/:id", { preHandler: requireActivePlan }, async (req) => {
     const { id } = req.params as { id: string };
     await chats().deleteOne({ _id: id, userId: req.userId! });
     await chatMessages().deleteMany({ chatId: id, userId: req.userId! });
     return { status: "ok" };
   });
 
-  app.post("/chats/:id/stream", { preHandler: requireAuth }, async (req, reply) => {
+  app.post("/chats/:id/stream", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z.object({ message: z.string().min(1).max(8000) }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input" });
     const userId = req.userId!;
     const chat = await chats().findOne({ _id: id, userId });
     if (!chat) return reply.code(404).send({ error: "not_found" });
+
+    // Each agent turn costs credits. Consume up-front; refunded below if the run errors.
+    if (env.stripe.enabled) {
+      const paid = await tryConsumeCredits(userId, CREDITS_PER_MESSAGE);
+      if (!paid) {
+        return reply.code(402).send({ error: "insufficient_credits", detail: "You're out of AI credits. Upgrade your plan to keep going." });
+      }
+    }
 
     const message = body.data.message.trim();
     const now = new Date();
@@ -84,12 +95,14 @@ export async function chatRoutes(app: FastifyInstance) {
       write({ type: "completed", toolResults });
     } catch (error) {
       console.error("[chat.stream]", (error as Error).message);
+      // Refund the credit we charged up-front since the turn didn't complete.
+      if (env.stripe.enabled) await users().updateOne({ _id: userId }, { $inc: { credits: CREDITS_PER_MESSAGE } }).catch(() => undefined);
       write({ type: "error", detail: "The agent could not complete this request. Please try again." });
     }
     reply.raw.end();
   });
 
-  app.post("/chats/:id/confirm-send", { preHandler: requireAuth }, async (req, reply) => {
+  app.post("/chats/:id/confirm-send", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     console.log(`[confirm-send] HIT chat=${id.slice(-8)} keys=${Object.keys((req.body as any) || {}).join(",")}`);
     const body = z

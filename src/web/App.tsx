@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./lib/auth";
+import { useAuth, hasActivePlan } from "./lib/auth";
 import Landing from "./pages/Landing";
+import Pricing from "./pages/Pricing";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import Verify from "./pages/auth/Verify";
@@ -31,6 +32,16 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+// Hard client gate: dashboard requires a verified email AND an active/trialing plan.
+// (The server independently enforces this on every API call — this is just UX.)
+function RequireActivePlan({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <FullLoader />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!hasActivePlan(user)) return <Navigate to="/pricing" replace />;
+  return <>{children}</>;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -40,12 +51,13 @@ export default function App() {
       <Route path="/verify" element={<Verify />} />
       <Route path="/forgot" element={<Forgot />} />
       <Route path="/reset" element={<Reset />} />
+      <Route path="/pricing" element={<Pricing />} />
       <Route
         path="/app"
         element={
-          <RequireAuth>
+          <RequireActivePlan>
             <AppLayout />
-          </RequireAuth>
+          </RequireActivePlan>
         }
       >
         <Route index element={<Navigate to="/app/chat" replace />} />

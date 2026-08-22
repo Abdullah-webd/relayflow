@@ -3,7 +3,7 @@ import { z } from "zod";
 import { env } from "../env";
 import { connections, destinations } from "../db";
 import { uid } from "../lib/crypto";
-import { requireAuth } from "../auth/context";
+import { requireActivePlan } from "../auth/context";
 import { listUserConnections, disconnectConnection } from "../connectors/manager";
 import { startWhatsapp, getWhatsappQr } from "../connectors/whatsapp";
 import { startTelegram, verifyTelegramCode, verifyTelegram2FA } from "../connectors/telegram";
@@ -14,11 +14,11 @@ const redirectDone = (platform: string) => `${env.webBaseUrl || ""}/app/connecti
 const redirectError = (platform: string) => `${env.webBaseUrl || ""}/app/connections?error=${platform}`;
 
 export async function connectionRoutes(app: FastifyInstance) {
-  app.get("/connections", { preHandler: requireAuth }, async (req) => {
+  app.get("/connections", { preHandler: requireActivePlan }, async (req) => {
     return { connections: await listUserConnections(req.userId!) };
   });
 
-  app.get("/connections/:id/destinations", { preHandler: requireAuth }, async (req, reply) => {
+  app.get("/connections/:id/destinations", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const conn = await connections().findOne({ _id: id, userId: req.userId! });
     if (!conn) return reply.code(404).send({ error: "not_found" });
@@ -26,7 +26,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     return { destinations: rows.map((d) => ({ id: d._id, name: d.name, kind: d.kind, selected: d.selected !== false })) };
   });
 
-  app.patch("/connections/:id/destinations", { preHandler: requireAuth }, async (req, reply) => {
+  app.patch("/connections/:id/destinations", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z.object({ selectedIds: z.array(z.string()) }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input" });
@@ -42,14 +42,14 @@ export async function connectionRoutes(app: FastifyInstance) {
     return { status: "ok" };
   });
 
-  app.delete("/connections/:id", { preHandler: requireAuth }, async (req) => {
+  app.delete("/connections/:id", { preHandler: requireActivePlan }, async (req) => {
     const { id } = req.params as { id: string };
     await disconnectConnection(req.userId!, id);
     return { status: "disconnected" };
   });
 
   // ---------- WhatsApp ----------
-  app.post("/connections/whatsapp", { preHandler: requireAuth }, async (req) => {
+  app.post("/connections/whatsapp", { preHandler: requireActivePlan }, async (req) => {
     const userId = req.userId!;
     const now = new Date();
     let conn = await connections().findOne({ userId, platform: "whatsapp" });
@@ -67,7 +67,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     return { id: conn._id };
   });
 
-  app.get("/connections/whatsapp/:id/qr", { preHandler: requireAuth }, async (req, reply) => {
+  app.get("/connections/whatsapp/:id/qr", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const conn = await connections().findOne({ _id: id, userId: req.userId! });
     if (!conn) return reply.code(404).send({ error: "not_found" });
@@ -75,7 +75,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   // ---------- Telegram ----------
-  app.post("/connections/telegram", { preHandler: requireAuth }, async (req, reply) => {
+  app.post("/connections/telegram", { preHandler: requireActivePlan }, async (req, reply) => {
     const body = z.object({ phone: z.string().min(6).max(20) }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input", detail: "Enter a valid phone number with country code." });
     const userId = req.userId!;
@@ -99,7 +99,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     return { id: conn._id, status: "pending" };
   });
 
-  app.post("/connections/telegram/:id/code", { preHandler: requireAuth }, async (req, reply) => {
+  app.post("/connections/telegram/:id/code", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z.object({ code: z.string().min(3).max(10) }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input" });
@@ -111,7 +111,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post("/connections/telegram/:id/2fa", { preHandler: requireAuth }, async (req, reply) => {
+  app.post("/connections/telegram/:id/2fa", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z.object({ password: z.string().min(1) }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input" });
@@ -124,7 +124,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   // ---------- Slack OAuth ----------
-  app.get("/connections/slack/start", { preHandler: requireAuth }, async (req, reply) => {
+  app.get("/connections/slack/start", { preHandler: requireActivePlan }, async (req, reply) => {
     if (!env.slack.clientId) return reply.code(400).send({ error: "not_configured", detail: "Slack is not configured." });
     return { url: slackAuthUrl(req.userId!) };
   });
@@ -143,7 +143,7 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   // ---------- Gmail OAuth ----------
-  app.get("/connections/gmail/start", { preHandler: requireAuth }, async (req, reply) => {
+  app.get("/connections/gmail/start", { preHandler: requireActivePlan }, async (req, reply) => {
     if (!env.google.clientId) return reply.code(400).send({ error: "not_configured", detail: "Gmail is not configured." });
     return { url: gmailAuthUrl(req.userId!) };
   });

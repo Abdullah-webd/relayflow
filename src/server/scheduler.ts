@@ -47,7 +47,7 @@ async function runTask(task: ScheduledTask): Promise<void> {
   if (task.schedule === "once") {
     patch.active = false;
   } else {
-    const next = new Date(task.runAt.getTime());
+    const next = new Date((task.runAt ?? new Date()).getTime());
     next.setUTCDate(next.getUTCDate() + (task.schedule === "weekly" ? 7 : 1));
     patch.runAt = next;
   }

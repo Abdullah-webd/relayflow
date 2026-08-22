@@ -12,6 +12,7 @@ import { authRoutes } from "./routes/auth";
 import { chatRoutes } from "./routes/chat";
 import { connectionRoutes } from "./routes/connections";
 import { taskRoutes } from "./routes/tasks";
+import { billingRoutes } from "./routes/billing";
 import { resumeConnections } from "./connectors/manager";
 import { startScheduler } from "./scheduler";
 
@@ -33,8 +34,10 @@ async function main() {
   await app.register(rateLimit, { max: 300, timeWindow: "1 minute" });
 
   // Tolerate empty JSON bodies (bodyless POSTs like creating a chat) instead of 400ing.
-  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body, done) => {
     const text = body as string;
+    // Keep the raw payload around for Stripe webhook signature verification.
+    (req as any).rawBody = text;
     if (!text || text.length === 0) return done(null, {});
     try {
       done(null, JSON.parse(text));
@@ -45,6 +48,7 @@ async function main() {
 
   app.get("/api/health", async () => ({ status: "ok", time: new Date().toISOString() }));
   await app.register(authRoutes, { prefix: "/api/auth" });
+  await app.register(billingRoutes, { prefix: "/api" });
   await app.register(chatRoutes, { prefix: "/api" });
   await app.register(connectionRoutes, { prefix: "/api" });
   await app.register(taskRoutes, { prefix: "/api" });

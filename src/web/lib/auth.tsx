@@ -1,11 +1,23 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "./api";
 
+export type SubStatus = "none" | "trialing" | "active" | "past_due" | "canceled" | "incomplete";
+
 export interface User {
   id: string;
   email: string;
   name: string;
   emailVerified: boolean;
+  timezone: string;
+  plan: "starter" | "growth" | null;
+  subscriptionStatus: SubStatus;
+  credits: number;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+}
+
+export function hasActivePlan(u: User | null): boolean {
+  return !!u && (u.subscriptionStatus === "trialing" || u.subscriptionStatus === "active");
 }
 
 interface AuthState {

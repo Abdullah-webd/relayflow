@@ -2,10 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { scheduledTasks, users } from "../db";
 import { uid } from "../lib/crypto";
-import { requireAuth } from "../auth/context";
+import { requireActivePlan } from "../auth/context";
 
 export async function taskRoutes(app: FastifyInstance) {
-  app.get("/tasks", { preHandler: requireAuth }, async (req) => {
+  app.get("/tasks", { preHandler: requireActivePlan }, async (req) => {
     const rows = await scheduledTasks().find({ userId: req.userId! }).sort({ runAt: 1 }).toArray();
     return {
       tasks: rows.map((t) => ({
@@ -21,7 +21,7 @@ export async function taskRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post("/tasks", { preHandler: requireAuth }, async (req, reply) => {
+  app.post("/tasks", { preHandler: requireActivePlan }, async (req, reply) => {
     const body = z
       .object({
         title: z.string().min(1).max(120),
@@ -53,7 +53,7 @@ export async function taskRoutes(app: FastifyInstance) {
     return { task: { ...task, id: task._id } };
   });
 
-  app.patch("/tasks/:id", { preHandler: requireAuth }, async (req, reply) => {
+  app.patch("/tasks/:id", { preHandler: requireActivePlan }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = z.object({ active: z.boolean() }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input" });
@@ -61,7 +61,7 @@ export async function taskRoutes(app: FastifyInstance) {
     return { status: "ok" };
   });
 
-  app.delete("/tasks/:id", { preHandler: requireAuth }, async (req) => {
+  app.delete("/tasks/:id", { preHandler: requireActivePlan }, async (req) => {
     const { id } = req.params as { id: string };
     await scheduledTasks().deleteOne({ _id: id, userId: req.userId! });
     return { status: "ok" };

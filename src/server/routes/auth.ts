@@ -15,7 +15,18 @@ import {
 const OTP_TTL_MS = 10 * 60 * 1000;
 
 function publicUser(user: User) {
-  return { id: user._id, email: user.email, name: user.name ?? "", emailVerified: user.emailVerified };
+  return {
+    id: user._id,
+    email: user.email,
+    name: user.name ?? "",
+    emailVerified: user.emailVerified,
+    timezone: user.timezone,
+    plan: user.plan ?? null,
+    subscriptionStatus: user.subscriptionStatus ?? "none",
+    credits: user.credits ?? 0,
+    trialEndsAt: user.trialEndsAt ?? null,
+    currentPeriodEnd: user.currentPeriodEnd ?? null,
+  };
 }
 
 async function issueOtp(userId: string, purpose: "verify_email" | "password_reset"): Promise<string> {
@@ -187,5 +198,36 @@ export async function authRoutes(app: FastifyInstance) {
     const user = await users().findOne({ _id: req.userId! });
     if (!user) return reply.code(401).send({ error: "unauthorized" });
     return reply.send({ user: publicUser(user) });
+  });
+
+  app.patch("/profile", { preHandler: requireAuth }, async (req, reply) => {
+    const schema = z.object({ name: z.string().max(120).optional(), timezone: z.string().max(64).optional() });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+    const set: Record<string, unknown> = { updatedAt: new Date() };
+    if (parsed.data.name !== undefined) set.name = parsed.data.name.trim();
+    if (parsed.data.timezone !== undefined) set.timezone = parsed.data.timezone;
+    await users().updateOne({ _id: req.userId! }, { $set: set });
+    const user = await users().findOne({ _id: req.userId! });
+    return reply.send({ user: publicUser(user!) });
+  });
+
+  app.post("/change-password", { preHandler: requireAuth }, async (req, reply) => {
+    const schema = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(8).max(200) });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_input", detail: parsed.error.issues[0]?.message });
+    const user = await users().findOne({ _id: req.userId! });
+    if (!user || !(await bcrypt.compare(parsed.data.currentPassword, user.passwordHash))) {
+      return reply.code(400).send({ error: "wrong_password", detail: "Your current password is incorrect." });
+    }
+    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+    await users().updateOne({ _id: user._id }, { $set: { passwordHash, updatedAt: new Date() } });
+    return reply.send({ status: "password_changed" });
+  });
+
+  app.post("/logout-all", { preHandler: requireAuth }, async (req, reply) => {
+    await destroyAllSessions(req.userId!);
+    clearSessionCookie(reply);
+    return reply.send({ status: "logged_out" });
   });
 }

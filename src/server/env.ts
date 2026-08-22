@@ -51,6 +51,14 @@ export const env = {
     apiId: num("TELEGRAM_API_ID", 0),
     apiHash: str("TELEGRAM_API_HASH"),
   },
+  stripe: {
+    secretKey: str("STRIPE_SECRET_KEY"),
+    publishableKey: str("STRIPE_PUBLISHABLE_KEY"),
+    webhookSecret: str("STRIPE_WEBHOOK_SECRET"),
+    get enabled() {
+      return this.secretKey.startsWith("sk_");
+    },
+  },
 };
 
 export type Env = typeof env;

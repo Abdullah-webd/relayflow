@@ -11,6 +11,14 @@ export type ConnectionStatus =
   | "disconnected"
   | "error";
 
+export type SubscriptionStatus =
+  | "none"
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "incomplete";
+
 export interface User {
   _id: string;
   email: string;
@@ -18,8 +26,24 @@ export interface User {
   passwordHash: string;
   emailVerified: boolean;
   timezone: string;
+  // ---- Billing ----
+  plan?: "starter" | "growth" | null;
+  subscriptionStatus?: SubscriptionStatus;
+  stripeCustomerId?: string | null;
+  stripeSubscriptionId?: string | null;
+  trialEndsAt?: Date | null;
+  currentPeriodEnd?: Date | null;
+  cancelAtPeriodEnd?: boolean;
+  credits?: number;
+  creditPeriodEnd?: Date | null; // period boundary the current credit grant belongs to
   createdAt: Date;
   updatedAt: Date;
+}
+
+// Small singleton store for app-wide config (e.g. cached Stripe price ids).
+export interface AppConfig {
+  _id: string;
+  [key: string]: unknown;
 }
 
 export interface AuthCode {
@@ -168,6 +192,7 @@ export const channelMessages = () => db().collection<ChannelMessage>("channel_me
 export const outbound = () => db().collection<Outbound>("outbound");
 export const scheduledTasks = () => db().collection<ScheduledTask>("scheduled_tasks");
 export const whatsappAuth = () => db().collection<WhatsAppAuth>("whatsapp_auth");
+export const appConfig = () => db().collection<AppConfig>("app_config");
 
 async function ensureIndexes(d: Db): Promise<void> {
   await d.collection("users").createIndex({ email: 1 }, { unique: true });

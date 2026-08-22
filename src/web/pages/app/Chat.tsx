@@ -111,6 +111,15 @@ export default function Chat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
       });
+      if (res.status === 402) {
+        const data = await res.json().catch(() => ({}));
+        patchAssistant(asstId, (m) => ({
+          ...m,
+          pending: false,
+          content: data.detail || "You're out of AI credits. Upgrade your plan in Settings to keep going.",
+        }));
+        return;
+      }
       if (!res.ok || !res.body) throw new Error("Request failed");
       const reader = res.body.getReader();
       const dec = new TextDecoder();
