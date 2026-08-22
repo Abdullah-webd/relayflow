@@ -109,3 +109,22 @@ export async function* streamRun(
 
   yield { type: "final", text: response.output_text ?? "", responseId: response.id ?? null, toolResults };
 }
+
+/**
+ * After the user approves an action (send/schedule) via the card, feed the outcome back
+ * into the agent's conversation chain so it KNOWS what happened and confirms naturally —
+ * and so a later "did you send it?" is answered correctly.
+ */
+export async function acknowledgeAction(
+  previousResponseId: string | null,
+  note: string,
+): Promise<{ text: string; responseId: string | null }> {
+  if (!client) return { text: note, responseId: previousResponseId };
+  const resp: any = await client.responses.create({
+    model: env.openaiModel,
+    instructions: `${SYSTEM}\n\nYou have just performed an action the user approved. Confirm what happened in one or two short sentences, naturally. Do not call any tools.`,
+    input: note,
+    ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
+  });
+  return { text: resp.output_text ?? note, responseId: resp.id ?? previousResponseId };
+}

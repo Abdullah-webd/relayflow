@@ -3,7 +3,7 @@ import { z } from "zod";
 import { chats, chatMessages, users } from "../db";
 import { uid } from "../lib/crypto";
 import { requireAuth } from "../auth/context";
-import { streamRun } from "../agent/agent";
+import { streamRun, acknowledgeAction } from "../agent/agent";
 import { sendToTargets, type SendTarget } from "../connectors/manager";
 import type { Platform } from "../db";
 
@@ -113,17 +113,21 @@ export async function chatRoutes(app: FastifyInstance) {
     if (!chat) return reply.code(404).send({ error: "not_found" });
 
     const results = await sendToTargets(userId, body.data.targets as SendTarget[], body.data.content);
-    const summary = results.map((r) => `${r.destinationName}${r.ok ? " ✓" : ` ✗ (${r.error})`}`).join(", ");
+    const okCount = results.filter((r) => r.ok).length;
+    const detail = results.map((r) => `${r.destinationName}: ${r.ok ? "sent" : `FAILED (${r.error})`}`).join("; ");
+    const note = `[System] The user approved sending the message "${body.data.content}". It has now been executed. ${okCount} of ${results.length} destination(s) delivered. Details: ${detail}. Confirm to the user clearly whether it was sent and to which destination(s).`;
+    // Feed the outcome back into the agent's memory + get a natural confirmation.
+    const ack = await acknowledgeAction(chat.lastResponseId, note);
     await chatMessages().insertOne({
       _id: uid(),
       chatId: id,
       userId,
       role: "assistant",
-      content: `**Sent.** ${summary}`,
+      content: ack.text || (okCount === results.length ? `✅ Sent to ${okCount} destination(s).` : `Sent to ${okCount}/${results.length}. ${detail}`),
       toolResults: [{ name: "send", result: { status: "done", results } }],
       createdAt: new Date(),
     });
-    await chats().updateOne({ _id: id }, { $set: { updatedAt: new Date() } });
-    return { results };
+    await chats().updateOne({ _id: id }, { $set: { lastResponseId: ack.responseId, updatedAt: new Date() } });
+    return { results, ok: okCount, total: results.length };
   });
 }

@@ -158,13 +158,22 @@ export default function Chat() {
   }
 
   async function approveSend(key: string, content: string, targets: any[]) {
+    if (!targets?.length) {
+      alert("No destination was resolved for this message. Please ask the agent to prepare it again.");
+      return;
+    }
     setResolved((s) => new Set(s).add(key));
     try {
       await api(`/chats/${chatId}/confirm-send`, { method: "POST", body: JSON.stringify({ content, targets }) });
       const { messages } = await api<{ messages: Msg[] }>(`/chats/${chatId}`);
       setMessages(messages);
-    } catch {
-      /* keep resolved */
+    } catch (e) {
+      setResolved((s) => {
+        const n = new Set(s);
+        n.delete(key);
+        return n;
+      });
+      alert("Couldn't send: " + (e as Error).message);
     }
   }
 

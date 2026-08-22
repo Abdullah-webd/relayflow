@@ -152,12 +152,14 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
       session.qrDataUrl = undefined;
       session.status = "connected";
       session.reconnectAttempts = 0;
+      console.info(`[whatsapp] connected connection=${connectionId.slice(-8)}`);
       await setConnectionStatus(connectionId, "connected", { lastError: null, heartbeatAt: new Date() });
       await syncGroups(userId, connectionId, socket);
     }
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
+      console.warn(`[whatsapp] closed connection=${connectionId.slice(-8)} code=${statusCode ?? "?"} loggedOut=${loggedOut}`);
       if (loggedOut) {
         teardown(session);
         sessions.delete(connectionId);
