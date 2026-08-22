@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { api } from "../../lib/api";
-import { Plus, Send, Trash2, Sparkles, Check, MessageSquare } from "lucide-react";
+import { Plus, Send, Trash2, Sparkles, Check, MessageSquare, X } from "lucide-react";
 
 interface Step {
   label: string;
@@ -35,7 +35,9 @@ export default function Chat() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [resolved, setResolved] = useState<Set<string>>(new Set());
+  const [actionStatus, setActionStatus] = useState<Record<string, { state: "sending" | "sent" | "failed" | "scheduled"; text: string }>>({});
+  const setStatus = (key: string, state: "sending" | "sent" | "failed" | "scheduled", text: string) =>
+    setActionStatus((s) => ({ ...s, [key]: { state, text } }));
   const scrollRef = useRef<HTMLDivElement>(null);
   // The chat currently being streamed into — skip the server reload for it so the
   // optimistic messages + live stream are not wiped when we navigate to the new URL.
@@ -159,33 +161,37 @@ export default function Chat() {
 
   async function approveSend(key: string, content: string, targets: any[]) {
     if (!targets?.length) {
-      alert("No destination was resolved for this message. Please ask the agent to prepare it again.");
+      setStatus(key, "failed", "No destination resolved — ask the agent to prepare it again.");
       return;
     }
-    setResolved((s) => new Set(s).add(key));
+    setStatus(key, "sending", targets.length > 1 ? `Sending to ${targets.length} destinations…` : "Sending…");
     try {
-      await api(`/chats/${chatId}/confirm-send`, { method: "POST", body: JSON.stringify({ content, targets }) });
-      const { messages } = await api<{ messages: Msg[] }>(`/chats/${chatId}`);
-      setMessages(messages);
-    } catch (e) {
-      setResolved((s) => {
-        const n = new Set(s);
-        n.delete(key);
-        return n;
+      const res = await api<{ ok: number; total: number; results: any[] }>(`/chats/${chatId}/confirm-send`, {
+        method: "POST",
+        body: JSON.stringify({ content, targets }),
       });
-      alert("Couldn't send: " + (e as Error).message);
+      const ok = res.ok ?? 0;
+      const total = res.total ?? targets.length;
+      if (ok === total) setStatus(key, "sent", `Sent to ${total} destination${total === 1 ? "" : "s"}`);
+      else if (ok === 0) {
+        const reason = res.results?.find((r) => !r.ok)?.error || "delivery failed";
+        setStatus(key, "failed", `Failed — ${reason}`);
+      } else setStatus(key, "sent", `Sent to ${ok} of ${total} (some failed)`);
+    } catch (e) {
+      setStatus(key, "failed", `Failed — ${(e as Error).message}`);
     }
   }
 
   async function approveSchedule(key: string, payload: any) {
-    setResolved((s) => new Set(s).add(key));
+    setStatus(key, "sending", "Scheduling…");
     try {
       await api("/tasks", {
         method: "POST",
         body: JSON.stringify({ title: payload.title, instruction: payload.instruction, schedule: payload.schedule, runAt: payload.run_at }),
       });
-    } catch {
-      /* noop */
+      setStatus(key, "scheduled", "Scheduled");
+    } catch (e) {
+      setStatus(key, "failed", `Couldn't schedule — ${(e as Error).message}`);
     }
   }
 
@@ -251,7 +257,7 @@ export default function Chat() {
                   key={m.id}
                   msg={m}
                   isLast={idx === messages.length - 1}
-                  resolved={resolved}
+                  actionStatus={actionStatus}
                   onApproveSend={approveSend}
                   onApproveSchedule={approveSchedule}
                 />
@@ -289,13 +295,13 @@ export default function Chat() {
 function MessageView({
   msg,
   isLast,
-  resolved,
+  actionStatus,
   onApproveSend,
   onApproveSchedule,
 }: {
   msg: Msg;
   isLast: boolean;
-  resolved: Set<string>;
+  actionStatus: Record<string, { state: "sending" | "sent" | "failed" | "scheduled"; text: string }>;
   onApproveSend: (key: string, content: string, targets: any[]) => void;
   onApproveSchedule: (key: string, payload: any) => void;
 }) {
@@ -325,7 +331,22 @@ function MessageView({
 
         {pendingActions.map((action, i) => {
           const key = `${msg.id}-${i}`;
-          if (resolved.has(key)) return <div key={key} className="mt-3 text-sm text-emerald-600 flex items-center gap-1.5"><Check size={15} /> Approved</div>;
+          const status = actionStatus[key];
+          if (status) {
+            const cls = status.state === "failed" ? "text-red-600" : status.state === "sending" ? "text-ink-500" : "text-emerald-600";
+            return (
+              <div key={key} className={`mt-3 flex items-center gap-2 text-sm font-medium ${cls}`}>
+                {status.state === "sending" ? (
+                  <span className="h-4 w-4 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" />
+                ) : status.state === "failed" ? (
+                  <X size={16} />
+                ) : (
+                  <Check size={16} />
+                )}
+                {status.text}
+              </div>
+            );
+          }
           const r = action.result;
           if (r.action === "send") {
             const targets: any[] = r.targets || [];
