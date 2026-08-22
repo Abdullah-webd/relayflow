@@ -5,6 +5,20 @@ import * as tg from "./telegram";
 import * as slack from "./slack";
 import * as gmail from "./gmail";
 
+// Forgiving group matcher: ignores case, spaces, punctuation and emoji so
+// "Study Master", "studymaster", "STUDYMASTER 📚" all match the same group.
+const normalizeName = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+function matchByGroup<T extends { externalId: string; name: string }>(dests: T[], group: string): T[] {
+  const exact = dests.filter((d) => d.externalId === group);
+  if (exact.length) return exact;
+  const q = normalizeName(group);
+  if (!q) return [];
+  return dests.filter((d) => {
+    const n = normalizeName(d.name);
+    return n.length > 0 && (n === q || n.includes(q) || q.includes(n));
+  });
+}
+
 export interface RecentMessage {
   platform: Platform;
   connectionId: string;
@@ -61,13 +75,11 @@ export async function getRecentMessages(
   if (opts.platform) query.platform = opts.platform;
   const conns = await connections().find(query).toArray();
   const results: RecentMessage[] = [];
-  const groupQuery = opts.group?.trim().toLowerCase();
 
   for (const conn of conns) {
     let dests = await destinations().find({ connectionId: conn._id }).limit(300).toArray();
-    if (groupQuery) {
-      const exact = dests.filter((d) => d.externalId === opts.group);
-      dests = exact.length ? exact : dests.filter((d) => (d.name || "").toLowerCase().includes(groupQuery));
+    if (opts.group?.trim()) {
+      dests = matchByGroup(dests, opts.group);
     } else {
       dests = dests.filter((d) => d.selected !== false).slice(0, 20);
     }
@@ -157,7 +169,6 @@ export async function resolveSendTargets(userId: string, platforms: string[], gr
   // A named group identifies the destination on its own — find it across ALL connected
   // platforms, regardless of which platform the model guessed in `platforms`.
   if (group && group.trim()) {
-    const q = group.trim().toLowerCase();
     let pool = connected;
     if (platforms.length && !platforms.includes("all")) {
       const wanted = new Set(platforms);
@@ -166,9 +177,9 @@ export async function resolveSendTargets(userId: string, platforms: string[], gr
     }
     for (const conn of pool) {
       const dests = await destinations().find({ connectionId: conn._id }).toArray();
-      const exact = dests.filter((d) => d.externalId === group);
-      const matched = exact.length ? exact : dests.filter((d) => (d.name || "").toLowerCase().includes(q));
-      for (const d of matched) targets.push({ platform: conn.platform, connectionId: conn._id, externalId: d.externalId, name: d.name });
+      for (const d of matchByGroup(dests, group)) {
+        targets.push({ platform: conn.platform, connectionId: conn._id, externalId: d.externalId, name: d.name });
+      }
     }
     return targets;
   }
