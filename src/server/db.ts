@@ -194,22 +194,46 @@ export const scheduledTasks = () => db().collection<ScheduledTask>("scheduled_ta
 export const whatsappAuth = () => db().collection<WhatsAppAuth>("whatsapp_auth");
 export const appConfig = () => db().collection<AppConfig>("app_config");
 
+/**
+ * Create an index, but never crash the whole server if an equivalent index already
+ * exists under a different name/options (e.g. a database seeded by the old app). Those
+ * conflicts (codes 85/86) mean the constraint is already in place, so we just warn.
+ */
+async function safeIndex(
+  d: Db,
+  collection: string,
+  keys: Record<string, 1 | -1>,
+  options?: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await d.collection(collection).createIndex(keys as any, options);
+  } catch (error) {
+    const code = (error as { code?: number }).code;
+    const message = (error as Error).message || "";
+    if (code === 85 || code === 86 || /already exists/i.test(message)) {
+      console.warn(`[db] index on ${collection} (${Object.keys(keys).join(",")}) already exists with different name/options — keeping the existing one.`);
+      return;
+    }
+    throw error;
+  }
+}
+
 async function ensureIndexes(d: Db): Promise<void> {
-  await d.collection("users").createIndex({ email: 1 }, { unique: true });
-  await d.collection("auth_codes").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-  await d.collection("sessions").createIndex({ tokenHash: 1 }, { unique: true });
-  await d.collection("sessions").createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-  await d.collection("chats").createIndex({ userId: 1, updatedAt: -1 });
-  await d.collection("chat_messages").createIndex({ chatId: 1, createdAt: 1 });
-  await d.collection("connections").createIndex({ userId: 1, platform: 1 });
-  await d.collection("destinations").createIndex({ connectionId: 1, externalId: 1 }, { unique: true });
-  await d.collection("channel_messages").createIndex({ userId: 1, platform: 1, occurredAt: -1 });
-  await d.collection("channel_messages").createIndex({ connectionId: 1, externalId: 1 }, { unique: true });
+  await safeIndex(d, "users", { email: 1 }, { unique: true });
+  await safeIndex(d, "auth_codes", { expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await safeIndex(d, "sessions", { tokenHash: 1 }, { unique: true });
+  await safeIndex(d, "sessions", { expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await safeIndex(d, "chats", { userId: 1, updatedAt: -1 });
+  await safeIndex(d, "chat_messages", { chatId: 1, createdAt: 1 });
+  await safeIndex(d, "connections", { userId: 1, platform: 1 });
+  await safeIndex(d, "destinations", { connectionId: 1, externalId: 1 }, { unique: true });
+  await safeIndex(d, "channel_messages", { userId: 1, platform: 1, occurredAt: -1 });
+  await safeIndex(d, "channel_messages", { connectionId: 1, externalId: 1 }, { unique: true });
   // Keep the recent-message cache small: auto-expire after 14 days.
-  await d.collection("channel_messages").createIndex({ occurredAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 14 });
-  await d.collection("outbound").createIndex({ userId: 1, createdAt: -1 });
-  await d.collection("scheduled_tasks").createIndex({ userId: 1, active: 1 });
-  await d.collection("whatsapp_auth").createIndex({ connectionId: 1 });
+  await safeIndex(d, "channel_messages", { occurredAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 14 });
+  await safeIndex(d, "outbound", { userId: 1, createdAt: -1 });
+  await safeIndex(d, "scheduled_tasks", { userId: 1, active: 1 });
+  await safeIndex(d, "whatsapp_auth", { connectionId: 1 });
 }
 
 export type { ObjectId, Collection };
