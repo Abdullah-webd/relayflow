@@ -91,7 +91,7 @@ export default function Pricing() {
       <header className="border-b border-line">
         <div className="mx-auto max-w-6xl px-6 h-16 flex items-center justify-between">
           <Link to="/">
-            <Logo />
+            <Logo byline />
           </Link>
           <div className="flex items-center gap-3 text-[15px]">
             {user ? (

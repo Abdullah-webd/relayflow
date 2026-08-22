@@ -226,7 +226,7 @@ export default function Landing() {
       <header className="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-line">
         <div className="mx-auto max-w-6xl px-5 sm:px-6 h-16 flex items-center justify-between">
           <Link to="/" aria-label="RelayFlow home" className="shrink-0">
-            <Logo />
+            <Logo byline />
           </Link>
 
           <nav aria-label="Primary" className="hidden md:flex items-center gap-1">
@@ -625,7 +625,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl px-5 sm:px-6 py-12">
           <div className="grid gap-10 md:grid-cols-4">
             <div className="md:col-span-1">
-              <Logo />
+              <Logo byline />
               <p className="mt-4 text-[15px] text-ink-500 leading-relaxed max-w-xs">
                 One AI agent across every business chat — WhatsApp, Telegram, Slack,
                 and Gmail.

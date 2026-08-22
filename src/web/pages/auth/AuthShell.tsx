@@ -7,7 +7,7 @@ export default function AuthShell({ title, subtitle, children }: { title: string
     <div className="min-h-full bg-white flex flex-col">
       <header className="px-6 py-5">
         <Link to="/">
-          <Logo />
+          <Logo byline />
         </Link>
       </header>
       <main className="flex-1 grid place-items-center px-4 pb-16">
