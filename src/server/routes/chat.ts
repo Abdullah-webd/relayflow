@@ -91,6 +91,7 @@ export async function chatRoutes(app: FastifyInstance) {
 
   app.post("/chats/:id/confirm-send", { preHandler: requireAuth }, async (req, reply) => {
     const { id } = req.params as { id: string };
+    console.log(`[confirm-send] HIT chat=${id.slice(-8)} keys=${Object.keys((req.body as any) || {}).join(",")}`);
     const body = z
       .object({
         content: z.string().min(1).max(8000),
@@ -107,27 +108,46 @@ export async function chatRoutes(app: FastifyInstance) {
           .max(200),
       })
       .safeParse(req.body);
-    if (!body.success) return reply.code(400).send({ error: "invalid_input" });
+    if (!body.success) {
+      console.log("[confirm-send] INVALID body:", JSON.stringify(req.body).slice(0, 300));
+      return reply.code(400).send({ error: "invalid_input", detail: body.error.issues[0]?.message });
+    }
     const userId = req.userId!;
     const chat = await chats().findOne({ _id: id, userId });
     if (!chat) return reply.code(404).send({ error: "not_found" });
 
+    console.log(`[confirm-send] chat=${id.slice(-8)} targets=${body.data.targets.length}:`, body.data.targets.map((t) => `${t.platform}/${t.name}`).join(", "));
     const results = await sendToTargets(userId, body.data.targets as SendTarget[], body.data.content);
+    console.log(`[confirm-send] result:`, results.map((r) => `${r.destinationName}=${r.ok ? "OK" : r.error}`).join(", "));
     const okCount = results.filter((r) => r.ok).length;
     const detail = results.map((r) => `${r.destinationName}: ${r.ok ? "sent" : `FAILED (${r.error})`}`).join("; ");
-    const note = `[System] The user approved sending the message "${body.data.content}". It has now been executed. ${okCount} of ${results.length} destination(s) delivered. Details: ${detail}. Confirm to the user clearly whether it was sent and to which destination(s).`;
-    // Feed the outcome back into the agent's memory + get a natural confirmation.
-    const ack = await acknowledgeAction(chat.lastResponseId, note);
+    const uniqueNames = [...new Set(body.data.targets.map((t) => t.name))].join(", ");
+    // Default confirmation (used even if the OpenAI acknowledgement call fails).
+    let ackText =
+      okCount === results.length
+        ? `✅ Sent to ${okCount === 1 ? uniqueNames : `${okCount} destination${okCount === 1 ? "" : "s"} (${uniqueNames})`}.`
+        : `⚠️ Sent to ${okCount}/${results.length}. ${detail}`;
+    let newResponseId = chat.lastResponseId;
+    // The message is already sent by this point — the acknowledgement is a nicety and
+    // must never fail the request (which would mislead the user into thinking it failed).
+    try {
+      const note = `[System] The user approved sending the message "${body.data.content}". It has now been executed. ${okCount} of ${results.length} destination(s) delivered. Details: ${detail}. Confirm to the user clearly whether it was sent and to which destination(s).`;
+      const ack = await acknowledgeAction(chat.lastResponseId, note);
+      if (ack.text?.trim()) ackText = ack.text;
+      newResponseId = ack.responseId;
+    } catch (error) {
+      console.error("[confirm-send] acknowledgement failed (send still went through):", (error as Error).message);
+    }
     await chatMessages().insertOne({
       _id: uid(),
       chatId: id,
       userId,
       role: "assistant",
-      content: ack.text || (okCount === results.length ? `✅ Sent to ${okCount} destination(s).` : `Sent to ${okCount}/${results.length}. ${detail}`),
+      content: ackText,
       toolResults: [{ name: "send", result: { status: "done", results } }],
       createdAt: new Date(),
     });
-    await chats().updateOne({ _id: id }, { $set: { lastResponseId: ack.responseId, updatedAt: new Date() } });
+    await chats().updateOne({ _id: id }, { $set: { lastResponseId: newResponseId, updatedAt: new Date() } });
     return { results, ok: okCount, total: results.length };
   });
 }

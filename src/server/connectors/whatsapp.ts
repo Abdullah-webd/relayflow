@@ -217,9 +217,16 @@ export function isWhatsappLive(connectionId: string): boolean {
 
 export async function sendWhatsapp(connectionId: string, destinationExternalId: string, text: string): Promise<string | null> {
   const session = sessions.get(connectionId);
-  if (!session || session.status !== "connected") throw new Error("WhatsApp is not connected");
-  const sent = await session.socket.sendMessage(destinationExternalId, { text });
-  return sent?.key.id ?? null;
+  if (!session) throw new Error("WhatsApp session not running — reconnect WhatsApp");
+  if (session.status !== "connected") throw new Error("WhatsApp is not connected yet — try again in a moment");
+  console.info(`[whatsapp] sending to ${destinationExternalId} connection=${connectionId.slice(-8)}`);
+  // Baileys sendMessage can hang if the socket is degraded; never let a send stall the request.
+  const sent = await Promise.race([
+    session.socket.sendMessage(destinationExternalId, { text }),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("WhatsApp send timed out")), 30_000)),
+  ]);
+  console.info(`[whatsapp] sent id=${(sent as any)?.key?.id ?? "?"}`);
+  return (sent as any)?.key?.id ?? null;
 }
 
 export async function disconnectWhatsapp(connectionId: string): Promise<void> {
@@ -241,6 +248,13 @@ export async function resumeWhatsapp(): Promise<void> {
     .find({ platform: "whatsapp", status: { $in: ["connected", "connecting", "qr"] } })
     .toArray();
   for (const row of rows) {
+    // Only resume connections that actually have saved credentials — otherwise a stale
+    // "connected" row with no auth spins in an endless reconnect (408) loop.
+    const hasCreds = await whatsappAuth().findOne({ _id: `${row._id}:creds` });
+    if (!hasCreds) {
+      await setConnectionStatus(row._id, "disconnected", { lastError: "no_credentials" });
+      continue;
+    }
     startWhatsapp(row.userId, row._id).catch((error) =>
       console.error(`[whatsapp] resume failed ${row._id}: ${(error as Error).message}`),
     );
