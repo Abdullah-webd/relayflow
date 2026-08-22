@@ -37,6 +37,9 @@ export default function Chat() {
   const [busy, setBusy] = useState(false);
   const [resolved, setResolved] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The chat currently being streamed into — skip the server reload for it so the
+  // optimistic messages + live stream are not wiped when we navigate to the new URL.
+  const streamingRef = useRef<string | null>(null);
 
   const loadChats = async () => {
     const { chats } = await api<{ chats: ChatSummary[] }>("/chats");
@@ -49,9 +52,10 @@ export default function Chat() {
 
   useEffect(() => {
     if (!chatId) {
-      setMessages([]);
+      if (!streamingRef.current) setMessages([]);
       return;
     }
+    if (chatId === streamingRef.current) return; // don't clobber an in-flight stream
     api<{ messages: Msg[] }>(`/chats/${chatId}`)
       .then(({ messages }) => setMessages(messages))
       .catch(() => setMessages([]));
@@ -87,7 +91,10 @@ export default function Chat() {
       const { chat } = await api<{ chat: ChatSummary }>("/chats", { method: "POST" });
       setChats((c) => [chat, ...c]);
       activeId = chat.id;
+      streamingRef.current = activeId;
       nav(`/app/chat/${chat.id}`);
+    } else {
+      streamingRef.current = activeId;
     }
 
     const userMsg: Msg = { id: `u-${Date.now()}`, role: "user", content: text };
@@ -145,6 +152,7 @@ export default function Chat() {
     } catch {
       patchAssistant(asstId, (m) => ({ ...m, pending: false, content: "I couldn't complete that request. Please try again." }));
     } finally {
+      streamingRef.current = null;
       setBusy(false);
     }
   }

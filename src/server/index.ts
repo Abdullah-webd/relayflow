@@ -32,6 +32,17 @@ async function main() {
   }
   await app.register(rateLimit, { max: 300, timeWindow: "1 minute" });
 
+  // Tolerate empty JSON bodies (bodyless POSTs like creating a chat) instead of 400ing.
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_req, body, done) => {
+    const text = body as string;
+    if (!text || text.length === 0) return done(null, {});
+    try {
+      done(null, JSON.parse(text));
+    } catch (error) {
+      done(error as Error);
+    }
+  });
+
   app.get("/api/health", async () => ({ status: "ok", time: new Date().toISOString() }));
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(chatRoutes, { prefix: "/api" });

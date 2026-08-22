@@ -49,8 +49,9 @@ export default function App() {
         }
       >
         <Route index element={<Navigate to="/app/chat" replace />} />
-        <Route path="chat" element={<Chat />} />
-        <Route path="chat/:chatId" element={<Chat />} />
+        {/* One route (optional param) so navigating to a new chat id does NOT remount
+            the component and wipe the in-progress message state. */}
+        <Route path="chat/:chatId?" element={<Chat />} />
         <Route path="connections" element={<Connections />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="settings" element={<Settings />} />
