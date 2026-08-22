@@ -12,8 +12,31 @@ import type { Platform } from "../db";
 
 export async function chatRoutes(app: FastifyInstance) {
   app.get("/chats", { preHandler: requireActivePlan }, async (req) => {
-    const rows = await chats().find({ userId: req.userId! }).sort({ updatedAt: -1 }).limit(100).toArray();
-    return { chats: rows.map((c) => ({ id: c._id, title: c.title, updatedAt: c.updatedAt })) };
+    const userId = req.userId!;
+    const rows = await chats().find({ userId }).sort({ updatedAt: -1 }).limit(100).toArray();
+    // Latest message per chat, for a ChatGPT-style preview line under each title.
+    const latest = await chatMessages()
+      .aggregate<{ _id: string; content: string; role: string }>([
+        { $match: { userId } },
+        { $sort: { createdAt: -1 } },
+        { $group: { _id: "$chatId", content: { $first: "$content" }, role: { $first: "$role" } } },
+      ])
+      .toArray();
+    const clean = (s: string) =>
+      (s || "")
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // markdown links → text
+        .replace(/[*_`#>~]/g, "") // drop md emphasis/heading/quote markers
+        .replace(/\s+/g, " ")
+        .trim();
+    const previewById = new Map(latest.map((m) => [m._id, `${m.role === "assistant" ? "" : "You: "}${clean(m.content)}`]));
+    return {
+      chats: rows.map((c) => ({
+        id: c._id,
+        title: c.title,
+        updatedAt: c.updatedAt,
+        preview: (previewById.get(c._id) || "").slice(0, 100),
+      })),
+    };
   });
 
   app.post("/chats", { preHandler: requireActivePlan }, async (req) => {

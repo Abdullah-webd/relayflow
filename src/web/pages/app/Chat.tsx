@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { api } from "../../lib/api";
-import { Plus, Send, Trash2, Sparkles, Check, MessageSquare, X } from "lucide-react";
+import { Plus, Send, Trash2, Sparkles, Check, MessageSquare, X, MoreVertical, Pencil, AlertTriangle } from "lucide-react";
 
 interface Step {
   label: string;
@@ -24,6 +24,7 @@ interface ChatSummary {
   id: string;
   title: string;
   updatedAt: string;
+  preview?: string;
 }
 
 const PLATFORM_LABEL: Record<string, string> = { whatsapp: "WhatsApp", telegram: "Telegram", slack: "Slack", gmail: "Gmail" };
@@ -38,6 +39,10 @@ export default function Chat() {
   const [actionStatus, setActionStatus] = useState<Record<string, { state: "sending" | "sent" | "failed" | "scheduled"; text: string }>>({});
   const setStatus = (key: string, state: "sending" | "sent" | "failed" | "scheduled", text: string) =>
     setActionStatus((s) => ({ ...s, [key]: { state, text } }));
+  const [menuId, setMenuId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState<ChatSummary | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   // The chat currently being streamed into — skip the server reload for it so the
   // optimistic messages + live stream are not wiped when we navigate to the new URL.
@@ -74,9 +79,24 @@ export default function Chat() {
   }
 
   async function deleteChat(id: string) {
-    await api(`/chats/${id}`, { method: "DELETE" });
+    setConfirmDelete(null);
     setChats((c) => c.filter((x) => x.id !== id));
     if (id === chatId) nav("/app/chat");
+    await api(`/chats/${id}`, { method: "DELETE" }).catch(() => loadChats());
+  }
+
+  function startRename(c: ChatSummary) {
+    setEditingId(c.id);
+    setEditTitle(c.title);
+    setMenuId(null);
+  }
+
+  async function saveRename(id: string) {
+    const title = editTitle.trim();
+    setEditingId(null);
+    if (!title) return;
+    setChats((cs) => cs.map((x) => (x.id === id ? { ...x, title } : x)));
+    await api(`/chats/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }).catch(() => loadChats());
   }
 
   const patchAssistant = (id: string, fn: (m: Msg) => Msg) =>
@@ -213,31 +233,96 @@ export default function Chat() {
             <Plus size={18} /> New chat
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-1">
+        <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
           {chats.length === 0 && <p className="text-sm text-ink-400 px-3 py-4">No conversations yet.</p>}
-          {chats.map((c) => (
-            <div
-              key={c.id}
-              className={`group flex items-center gap-2 rounded-xl px-3 h-11 cursor-pointer ${
-                c.id === chatId ? "bg-brand-50 text-brand-700" : "text-ink-700 hover:bg-surface"
-              }`}
-              onClick={() => nav(`/app/chat/${c.id}`)}
-            >
-              <MessageSquare size={16} className="shrink-0 opacity-70" />
-              <span className="flex-1 truncate text-sm font-medium">{c.title}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  deleteChat(c.id);
-                }}
-                className="opacity-0 group-hover:opacity-100 text-ink-400 hover:text-red-500"
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-          ))}
+          {chats.map((c) => {
+            const active = c.id === chatId;
+            const editing = editingId === c.id;
+            return (
+              <div key={c.id} className={`group relative rounded-xl ${active ? "bg-brand-50" : "hover:bg-surface"}`}>
+                {editing ? (
+                  <div className="px-2 py-1.5">
+                    <input
+                      autoFocus
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveRename(c.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      onBlur={() => saveRename(c.id)}
+                      className="input h-9 text-sm"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer" onClick={() => nav(`/app/chat/${c.id}`)}>
+                    <MessageSquare size={16} className={`mt-0.5 shrink-0 ${active ? "text-brand-600" : "text-ink-400"}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className={`truncate text-sm font-semibold ${active ? "text-brand-700" : "text-ink-800"}`}>{c.title}</div>
+                      {c.preview && <div className="truncate text-xs text-ink-400 mt-0.5">{c.preview}</div>}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuId(menuId === c.id ? null : c.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-ink-400 hover:text-ink-700 -mr-1 mt-0.5 shrink-0"
+                      aria-label="Chat options"
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                  </div>
+                )}
+
+                {menuId === c.id && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setMenuId(null)} />
+                    <div className="absolute right-2 top-10 z-20 w-40 rounded-xl border border-line bg-white shadow-pop p-1">
+                      <button
+                        onClick={() => startRename(c)}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-ink-700 hover:bg-surface"
+                      >
+                        <Pencil size={15} /> Rename
+                      </button>
+                      <button
+                        onClick={() => {
+                          setConfirmDelete(c);
+                          setMenuId(null);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 size={15} /> Delete
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* Delete confirmation */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 bg-ink-900/40 grid place-items-center p-4" onClick={() => setConfirmDelete(null)}>
+          <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3">
+              <span className="grid place-items-center h-11 w-11 rounded-full bg-red-50 text-red-600 shrink-0">
+                <AlertTriangle size={20} />
+              </span>
+              <div>
+                <h3 className="font-bold text-ink-900">Delete this chat?</h3>
+                <p className="text-sm text-ink-500">This permanently removes the conversation.</p>
+              </div>
+            </div>
+            <p className="mt-4 text-sm text-ink-700 bg-surface rounded-lg px-3 py-2 truncate">{confirmDelete.title}</p>
+            <div className="mt-5 flex gap-2 justify-end">
+              <button onClick={() => setConfirmDelete(null)} className="btn-ghost">Cancel</button>
+              <button onClick={() => deleteChat(confirmDelete.id)} className="btn-danger">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Conversation */}
       <div className="flex-1 min-w-0 flex flex-col bg-white">

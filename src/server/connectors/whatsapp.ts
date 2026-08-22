@@ -25,6 +25,7 @@ type WaSession = {
   userId: string;
   qrDataUrl?: string;
   status: string;
+  linking?: boolean; // QR scanned, pairing/syncing behind the scenes (not yet "open")
   reconnectAttempts: number;
   reconnectTimer?: ReturnType<typeof setTimeout>;
   stableTimer?: ReturnType<typeof setTimeout>;
@@ -147,7 +148,17 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
   });
   const session: WaSession = { socket, userId, status: "connecting", reconnectAttempts: attempt, closing: false };
   sessions.set(connectionId, session);
-  socket.ev.on("creds.update", saveCreds);
+  socket.ev.on("creds.update", async () => {
+    await saveCreds();
+    // Once the account identity (`me`) is present but we're not "open" yet, the QR has
+    // been scanned and WhatsApp is pairing/syncing. Drop the stale QR and flip to "linking"
+    // so the UI can show real progress instead of a dead QR code.
+    if (state.creds?.me && session.status !== "connected" && !session.linking) {
+      session.qrDataUrl = undefined;
+      session.linking = true;
+      await setConnectionStatus(connectionId, "connecting", { lastError: null }).catch(() => undefined);
+    }
+  });
 
   socket.ev.on("connection.update", async (update) => {
     if (session.closing || sessions.get(connectionId) !== session) return;
@@ -155,10 +166,12 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
     if (qr) {
       session.qrDataUrl = await QRCode.toDataURL(qr).catch(() => undefined);
       session.status = "qr";
+      session.linking = false;
       await setConnectionStatus(connectionId, "qr", { lastError: null });
     }
     if (connection === "open") {
       session.qrDataUrl = undefined;
+      session.linking = false;
       session.status = "connected";
       // Only reset the backoff after the connection stays up for a while. Resetting
       // immediately made a flapping connection reconnect fast and hammer WhatsApp (408).
@@ -243,6 +256,16 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
 
 export function getWhatsappQr(connectionId: string): string | undefined {
   return sessions.get(connectionId)?.qrDataUrl;
+}
+
+/** Coarse connect phase for the UI: qr → linking → connected (or connecting/disconnected). */
+export function getWhatsappPhase(connectionId: string): string {
+  const s = sessions.get(connectionId);
+  if (!s) return "connecting";
+  if (s.status === "connected") return "connected";
+  if (s.linking) return "linking";
+  if (s.qrDataUrl) return "qr";
+  return "connecting";
 }
 
 export function isWhatsappLive(connectionId: string): boolean {

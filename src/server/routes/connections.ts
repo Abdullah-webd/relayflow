@@ -5,7 +5,7 @@ import { connections, destinations } from "../db";
 import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
 import { listUserConnections, disconnectConnection } from "../connectors/manager";
-import { startWhatsapp, getWhatsappQr } from "../connectors/whatsapp";
+import { startWhatsapp, getWhatsappQr, getWhatsappPhase } from "../connectors/whatsapp";
 import { startTelegram, verifyTelegramCode, verifyTelegram2FA } from "../connectors/telegram";
 import { slackAuthUrl, completeSlackOAuth, readState as slackState } from "../connectors/slack";
 import { gmailAuthUrl, completeGmailOAuth, readState as gmailState } from "../connectors/gmail";
@@ -71,7 +71,9 @@ export async function connectionRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const conn = await connections().findOne({ _id: id, userId: req.userId! });
     if (!conn) return reply.code(404).send({ error: "not_found" });
-    return { status: conn.status, qr: getWhatsappQr(id) ?? null };
+    // Live phase from the socket (qr → linking → connected); fall back to the stored status.
+    const phase = conn.status === "connected" ? "connected" : getWhatsappPhase(id);
+    return { status: phase, qr: phase === "qr" ? getWhatsappQr(id) ?? null : null };
   });
 
   // ---------- Telegram ----------

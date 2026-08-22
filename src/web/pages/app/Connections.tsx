@@ -149,7 +149,9 @@ export default function Connections() {
 
 function WhatsAppModal({ onClose }: { onClose: () => void }) {
   const [qr, setQr] = useState<string | null>(null);
-  const [status, setStatus] = useState("connecting");
+  const [status, setStatus] = useState("connecting"); // connecting | qr | linking | connected
+  const [everHadQr, setEverHadQr] = useState(false);
+  const [linkSecs, setLinkSecs] = useState(0);
 
   useEffect(() => {
     let stop = false;
@@ -162,9 +164,14 @@ function WhatsAppModal({ onClose }: { onClose: () => void }) {
         try {
           const s = await api<{ status: string; qr: string | null }>(`/connections/whatsapp/${id}/qr`);
           setStatus(s.status);
-          if (s.qr) setQr(s.qr);
+          if (s.qr) {
+            setQr(s.qr);
+            setEverHadQr(true);
+          } else if (s.status !== "qr") {
+            setQr(null);
+          }
           if (s.status === "connected") {
-            setTimeout(onClose, 900);
+            setTimeout(onClose, 1100);
             return;
           }
         } catch {
@@ -179,19 +186,54 @@ function WhatsAppModal({ onClose }: { onClose: () => void }) {
     };
   }, []);
 
+  // Once the QR is scanned (or gone), count up so the wait shows visible progress.
+  const isLinking = status === "linking" || (everHadQr && !qr && status !== "connected");
+  useEffect(() => {
+    if (!isLinking) return;
+    const t = setInterval(() => setLinkSecs((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [isLinking]);
+
   return (
     <Modal title="Connect WhatsApp" onClose={onClose}>
-      <p className="text-sm text-ink-600">Open WhatsApp → <b>Linked devices</b> → <b>Link a device</b>, then scan this code.</p>
-      <div className="mt-4 grid place-items-center h-64">
-        {status === "connected" ? (
-          <div className="text-center text-emerald-600"><Check size={40} className="mx-auto" /><p className="mt-2 font-semibold">Connected!</p></div>
-        ) : qr ? (
-          <img src={qr} alt="WhatsApp QR" className="h-56 w-56 rounded-xl border border-line" />
-        ) : (
-          <div className="text-ink-400 flex items-center gap-2"><span className="h-4 w-4 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" /> Generating code…</div>
-        )}
-      </div>
-      <p className="text-xs text-ink-400 mt-2 text-center">Keep this open until it connects. Only your group messages are read.</p>
+      {status === "connected" ? (
+        <div className="grid place-items-center h-64">
+          <div className="text-center text-emerald-600">
+            <div className="mx-auto grid place-items-center h-16 w-16 rounded-full bg-emerald-50">
+              <Check size={34} />
+            </div>
+            <p className="mt-3 font-bold text-ink-900">WhatsApp connected!</p>
+            <p className="text-sm text-ink-500">Syncing your groups now…</p>
+          </div>
+        </div>
+      ) : isLinking ? (
+        <div className="grid place-items-center h-64 text-center px-4">
+          <div>
+            <span className="mx-auto block h-12 w-12 rounded-full border-[3px] border-brand-500 border-t-transparent animate-spin" />
+            <p className="mt-4 font-bold text-ink-900">Linking your WhatsApp…</p>
+            <p className="mt-1 text-sm text-ink-500">
+              Scan detected — WhatsApp is pairing this device. This can take up to a minute, so please keep this open.
+            </p>
+            <p className="mt-3 text-xs font-semibold text-ink-400">Connecting… {linkSecs}s</p>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-ink-600">
+            Open WhatsApp → <b>Linked devices</b> → <b>Link a device</b>, then scan this code.
+          </p>
+          <div className="mt-4 grid place-items-center h-56">
+            {qr ? (
+              <img src={qr} alt="WhatsApp QR" className="h-56 w-56 rounded-xl border border-line" />
+            ) : (
+              <div className="text-ink-400 flex items-center gap-2">
+                <span className="h-4 w-4 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" /> Generating code…
+              </div>
+            )}
+          </div>
+          <p className="text-xs text-ink-400 mt-2 text-center">Only your group messages are read. Keep this open until it connects.</p>
+        </>
+      )}
     </Modal>
   );
 }
