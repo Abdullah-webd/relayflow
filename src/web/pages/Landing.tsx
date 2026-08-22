@@ -83,60 +83,23 @@ const features = [
   },
 ];
 
-const testimonials = [
+// Real customers from the original RelayFlow site.
+const customers = [
   {
-    quote:
-      "RelayFlow surfaced a shift in product demand in minutes that would've taken us days of scrolling.",
-    name: "Ada Okafor",
-    role: "Head of Customer Operations",
+    name: "Graph",
+    href: "https://graph.finance",
+    logo: "/graph-logo.jpg",
+    context: "Global payments · Techstars ’23",
+    result: "30×",
+    outcome: "reported increase in productivity and revenue",
   },
   {
-    quote:
-      "One place to ask about every conversation and send a single message to all our groups. It replaced three tabs.",
-    name: "Daniel Mensah",
-    role: "Founder, Retail",
-  },
-  {
-    quote:
-      "The approve-before-send step means the AI never does anything I didn't sign off on. That's the part I trust.",
-    name: "Priya Nair",
-    role: "Community Lead",
-  },
-  {
-    quote:
-      "I broadcast our weekly update to four channels with one prompt. What used to be a 40-minute chore is now 40 seconds.",
-    name: "Marcus Bello",
-    role: "Ops Manager, Logistics",
-  },
-  {
-    quote:
-      "Scheduled good-morning messages to our WhatsApp community run themselves now. Set it once and forget it.",
-    name: "Lena Hoffmann",
-    role: "Community Manager",
-  },
-  {
-    quote:
-      "Asking \"what happened on Slack today?\" and getting a clean summary changed how I start every morning.",
-    name: "Tunde Adeyemi",
-    role: "Founder, SaaS Startup",
-  },
-  {
-    quote:
-      "The unified inbox is the dream — Telegram, Gmail, WhatsApp, all answered from one chat window.",
-    name: "Sofia Marino",
-    role: "Customer Success Lead",
-  },
-  {
-    quote:
-      "It drafts, I approve, it sends. Genuinely saves my small team hours every single week.",
-    name: "Rahul Verma",
-    role: "Agency Owner",
-  },
-  {
-    quote:
-      "Knowing exactly which channels are connected at a glance gives me real peace of mind.",
-    name: "Grace Osei",
-    role: "Support Team Lead",
+    name: "ScalePad",
+    href: "https://www.scalepad.com",
+    wordmark: true,
+    context: "The MSP operating platform",
+    result: "20×",
+    outcome: "reported increase in outreach and productivity",
   },
 ];
 
@@ -208,40 +171,43 @@ const marqueeCss = `
 }
 `;
 
-function TestimonialCard({ t }: { t: (typeof testimonials)[number] }) {
+function CustomerCard({ c }: { c: (typeof customers)[number] }) {
   return (
-    <figure className="card p-6 w-[320px] sm:w-[380px] shrink-0 flex flex-col justify-between">
-      <blockquote className="text-ink-800 leading-relaxed text-[15px]">
-        “{t.quote}”
-      </blockquote>
-      <figcaption className="mt-5 flex items-center gap-3">
-        <span className="grid place-items-center h-10 w-10 rounded-full bg-brand-100 text-brand-700 font-bold shrink-0">
-          {t.name[0]}
+    <a
+      href={c.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="card p-6 sm:p-7 w-[340px] sm:w-[440px] shrink-0 flex flex-col hover:-translate-y-1 hover:shadow-pop transition"
+    >
+      <div className="flex items-center justify-between gap-4 pb-4 border-b border-line min-h-[52px]">
+        {c.wordmark ? (
+          <span className="text-[26px] font-extrabold tracking-tight text-ink-900">
+            Scale<span className="text-brand-600">Pad</span>
+          </span>
+        ) : (
+          <img src={c.logo} alt={c.name} className="h-8 w-auto object-contain" />
+        )}
+        <span className="text-[11px] font-bold uppercase tracking-wide text-ink-400 text-right max-w-[150px] leading-tight">
+          {c.context}
         </span>
-        <div>
-          <div className="font-semibold text-ink-900 text-[15px]">{t.name}</div>
-          <div className="text-sm text-ink-500">{t.role}</div>
-        </div>
-      </figcaption>
-    </figure>
+      </div>
+      <div className="mt-5 flex items-center gap-4">
+        <span className="text-5xl font-extrabold tracking-tight text-brand-600 leading-none">{c.result}</span>
+        <span className="text-[15px] text-ink-600 leading-snug max-w-[230px]">{c.outcome}</span>
+      </div>
+      <small className="mt-auto pt-4 text-[11px] uppercase tracking-wide font-bold text-ink-400">Customer-reported outcome</small>
+    </a>
   );
 }
 
-function MarqueeRow({
-  direction,
-  items,
-}: {
-  direction: "left" | "right";
-  items: typeof testimonials;
-}) {
-  const loop = [...items, ...items];
+function CustomerMarquee() {
+  // Duplicate the small real set enough times to fill a seamless scrolling loop.
+  const loop = [...customers, ...customers, ...customers, ...customers];
   return (
     <div className="rf-marquee-group overflow-hidden py-2">
-      <div
-        className={`rf-marquee-track ${direction === "left" ? "rf-row-left" : "rf-row-right"}`}
-      >
-        {loop.map((t, i) => (
-          <TestimonialCard key={`${direction}-${t.name}-${i}`} t={t} />
+      <div className="rf-marquee-track rf-row-left">
+        {loop.map((c, i) => (
+          <CustomerCard key={`${c.name}-${i}`} c={c} />
         ))}
       </div>
     </div>
@@ -251,9 +217,6 @@ function MarqueeRow({
 export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-
-  const rowA = testimonials.slice(0, 5);
-  const rowB = testimonials.slice(4);
 
   return (
     <div className="min-h-full bg-white text-ink-800 overflow-x-hidden">
@@ -501,21 +464,23 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* Testimonials marquee */}
+        {/* Trusted by — real customer outcomes */}
         <section className="py-16 sm:py-20 overflow-hidden">
           <div className="mx-auto max-w-6xl px-5 sm:px-6">
-            <div className="max-w-2xl mx-auto text-center">
-              <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink-900">
-                Loved by fast-moving teams
-              </h2>
-              <p className="mt-3 text-[15px] sm:text-lg text-ink-600 leading-relaxed">
-                Operators, founders, and community leads who stopped juggling tabs.
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+              <div>
+                <div className="text-sm font-bold uppercase tracking-wide text-brand-600">Trusted by</div>
+                <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-ink-900">
+                  Teams moving faster with RelayFlow.
+                </h2>
+              </div>
+              <p className="text-[15px] sm:text-base text-ink-600 leading-relaxed max-w-sm">
+                Real operators turning conversations into measurable momentum.
               </p>
             </div>
           </div>
-          <div className="mt-12 space-y-4">
-            <MarqueeRow direction="left" items={rowA} />
-            <MarqueeRow direction="right" items={rowB} />
+          <div className="mt-12">
+            <CustomerMarquee />
           </div>
         </section>
 
