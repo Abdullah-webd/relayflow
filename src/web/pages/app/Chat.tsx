@@ -408,6 +408,54 @@ function MessageView({
   }
 
   const pendingActions = (msg.toolResults || []).filter((t) => t.result?.status === "pending_confirmation");
+  const sendActions = pendingActions.filter((t) => t.result?.action === "send");
+  const scheduleActions = pendingActions.filter((t) => t.result?.action === "schedule");
+
+  // Collapse pending sends by (message, platform): the SAME message going to several
+  // groups on ONE channel becomes a single Approve & send; different channels stay
+  // separate so each gets its own confirmation.
+  const sendGroups: { key: string; platform: string; content: string; targets: any[] }[] = [];
+  {
+    const map = new Map<string, { key: string; platform: string; content: string; targets: any[]; seen: Set<string> }>();
+    for (const a of sendActions) {
+      const content = a.result.content || "";
+      for (const t of a.result.targets || []) {
+        const gk = `${msg.id}::${content}::${t.platform}`;
+        let g = map.get(gk);
+        if (!g) {
+          g = { key: gk, platform: t.platform, content, targets: [], seen: new Set() };
+          map.set(gk, g);
+          sendGroups.push(g);
+        }
+        const dedup = `${t.platform}:${t.externalId}`;
+        if (!g.seen.has(dedup)) {
+          g.seen.add(dedup);
+          g.targets.push(t);
+        }
+      }
+    }
+  }
+  // A prepared send that matched no destination — surface it once so the user isn't left
+  // wondering why nothing appeared.
+  const unresolvedSend = sendActions.length > 0 && sendGroups.length === 0;
+
+  const renderStatus = (key: string) => {
+    const status = actionStatus[key];
+    if (!status) return null;
+    const cls = status.state === "failed" ? "text-red-600" : status.state === "sending" ? "text-ink-500" : "text-emerald-600";
+    return (
+      <div key={key} className={`mt-3 flex items-center gap-2 text-sm font-medium ${cls}`}>
+        {status.state === "sending" ? (
+          <span className="h-4 w-4 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" />
+        ) : status.state === "failed" ? (
+          <X size={16} />
+        ) : (
+          <Check size={16} />
+        )}
+        {status.text}
+      </div>
+    );
+  };
 
   return (
     <div className="flex items-start gap-3">
@@ -423,62 +471,52 @@ function MessageView({
           </div>
         )}
 
-        {pendingActions.map((action, i) => {
-          const key = `${msg.id}-${i}`;
-          const status = actionStatus[key];
-          if (status) {
-            const cls = status.state === "failed" ? "text-red-600" : status.state === "sending" ? "text-ink-500" : "text-emerald-600";
-            return (
-              <div key={key} className={`mt-3 flex items-center gap-2 text-sm font-medium ${cls}`}>
-                {status.state === "sending" ? (
-                  <span className="h-4 w-4 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" />
-                ) : status.state === "failed" ? (
-                  <X size={16} />
-                ) : (
-                  <Check size={16} />
-                )}
-                {status.text}
+        {/* One Approve & send per channel: many groups on the same channel share a button. */}
+        {sendGroups.map((g) => {
+          if (actionStatus[g.key]) return renderStatus(g.key);
+          const label = PLATFORM_LABEL[g.platform] || g.platform;
+          const names = g.targets.map((t) => t.name);
+          const many = g.targets.length > 1;
+          const toLabel = !many ? names[0] : `${g.targets.length} groups — ${names.slice(0, 3).join(", ")}${g.targets.length > 3 ? "…" : ""}`;
+          return (
+            <div key={g.key} className="mt-3 card p-4">
+              <div className="text-sm font-semibold text-ink-900">
+                Send to {label}{many ? ` · ${g.targets.length} groups` : ""}?
               </div>
-            );
-          }
+              <div className="mt-2 rounded-xl bg-surface border border-line px-3 py-2.5 text-[15px] text-ink-800 whitespace-pre-wrap">{g.content}</div>
+              <div className="mt-2 text-sm text-ink-500">To: {toLabel}</div>
+              <div className="mt-3 flex gap-2">
+                <button onClick={() => onApproveSend(g.key, g.content, g.targets)} className="btn-primary h-10 px-4">
+                  {many ? `Approve & send to all ${g.targets.length}` : "Approve & send"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+
+        {unresolvedSend && (
+          <div className="mt-3 card p-4 border-amber-200">
+            <div className="text-sm font-semibold text-ink-900">Couldn't find a matching destination</div>
+            <div className="mt-1 text-sm text-ink-500">Check that the channel is connected and the group name is correct, then try again.</div>
+          </div>
+        )}
+
+        {scheduleActions.map((action, i) => {
+          const key = `${msg.id}-sched-${i}`;
+          if (actionStatus[key]) return renderStatus(key);
           const r = action.result;
-          if (r.action === "send") {
-            const targets: any[] = r.targets || [];
-            const names = targets.map((t) => `${t.name} (${PLATFORM_LABEL[t.platform] || t.platform})`);
-            const toLabel =
-              targets.length === 0
-                ? "no matching destination"
-                : targets.length <= 4
-                ? names.join(", ")
-                : `${targets.length} destinations — ${names.slice(0, 3).join(", ")}…`;
-            return (
-              <div key={key} className="mt-3 card p-4">
-                <div className="text-sm font-semibold text-ink-900">Send this message?</div>
-                <div className="mt-2 rounded-xl bg-surface border border-line px-3 py-2.5 text-[15px] text-ink-800 whitespace-pre-wrap">{r.content}</div>
-                <div className="mt-2 text-sm text-ink-500">To: {toLabel}</div>
-                <div className="mt-3 flex gap-2">
-                  <button disabled={!targets.length} onClick={() => onApproveSend(key, r.content, targets)} className="btn-primary h-10 px-4">
-                    Approve & send
-                  </button>
-                </div>
+          return (
+            <div key={key} className="mt-3 card p-4">
+              <div className="text-sm font-semibold text-ink-900">Schedule this task?</div>
+              <div className="mt-2 text-[15px] text-ink-800">{r.title}</div>
+              <div className="mt-1 text-sm text-ink-500">
+                {r.schedule} · runs {new Date(r.run_at).toLocaleString()}
               </div>
-            );
-          }
-          if (r.action === "schedule") {
-            return (
-              <div key={key} className="mt-3 card p-4">
-                <div className="text-sm font-semibold text-ink-900">Schedule this task?</div>
-                <div className="mt-2 text-[15px] text-ink-800">{r.title}</div>
-                <div className="mt-1 text-sm text-ink-500">
-                  {r.schedule} · runs {new Date(r.run_at).toLocaleString()}
-                </div>
-                <div className="mt-3">
-                  <button onClick={() => onApproveSchedule(key, r)} className="btn-primary h-10 px-4">Approve & schedule</button>
-                </div>
+              <div className="mt-3">
+                <button onClick={() => onApproveSchedule(key, r)} className="btn-primary h-10 px-4">Approve & schedule</button>
               </div>
-            );
-          }
-          return null;
+            </div>
+          );
         })}
       </div>
     </div>
