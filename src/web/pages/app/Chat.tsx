@@ -17,6 +17,7 @@ interface Msg {
   role: "user" | "assistant";
   content: string;
   toolResults?: ToolResult[];
+  resolvedActions?: { key: string; state: string; text: string }[];
   pending?: boolean;
   steps?: Step[];
 }
@@ -64,9 +65,21 @@ export default function Chat() {
     }
     if (chatId === streamingRef.current) return; // don't clobber an in-flight stream
     api<{ messages: Msg[] }>(`/chats/${chatId}`)
-      .then(({ messages }) => setMessages(messages))
+      .then(({ messages }) => {
+        setMessages(messages);
+        seedResolved(messages);
+      })
       .catch(() => setMessages([]));
   }, [chatId]);
+
+  // Re-apply approvals already acted on so a refresh doesn't show the Approve button again.
+  function seedResolved(msgs: Msg[]) {
+    setActionStatus((prev) => {
+      const next = { ...prev };
+      for (const m of msgs) for (const r of m.resolvedActions || []) next[r.key] = { state: r.state as any, text: r.text };
+      return next;
+    });
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -170,7 +183,9 @@ export default function Chat() {
             patchAssistant(asstId, (m) => ({ ...m, content: m.content + ev.delta, pending: false }));
           } else if (ev.type === "completed") {
             sawTerminal = true;
-            patchAssistant(asstId, (m) => ({ ...m, pending: false, toolResults: ev.toolResults || [] }));
+            // Adopt the server's message id so approvals persist against the id the
+            // message keeps after a refresh.
+            patchAssistant(asstId, (m) => ({ ...m, id: ev.messageId || m.id, pending: false, toolResults: ev.toolResults || [] }));
           } else if (ev.type === "error") {
             sawTerminal = true;
             patchAssistant(asstId, (m) => ({ ...m, pending: false, content: ev.detail || "Something went wrong." }));
@@ -188,7 +203,12 @@ export default function Chat() {
     }
   }
 
-  async function approveSend(key: string, content: string, targets: any[]) {
+  function persistResolve(messageId: string, key: string, state: string, text: string) {
+    if (!messageId || messageId.startsWith("a-")) return; // no server id yet (shouldn't happen post-stream)
+    api(`/chats/${chatId}/resolve`, { method: "POST", body: JSON.stringify({ messageId, key, state, text }) }).catch(() => undefined);
+  }
+
+  async function approveSend(messageId: string, key: string, content: string, targets: any[]) {
     if (!targets?.length) {
       setStatus(key, "failed", "No destination resolved — ask the agent to prepare it again.");
       return;
@@ -201,17 +221,21 @@ export default function Chat() {
       });
       const ok = res.ok ?? 0;
       const total = res.total ?? targets.length;
-      if (ok === total) setStatus(key, "sent", `Sent to ${total} destination${total === 1 ? "" : "s"}`);
+      let state: "sent" | "failed" = "sent";
+      let text = "";
+      if (ok === total) text = `Sent to ${total} destination${total === 1 ? "" : "s"}`;
       else if (ok === 0) {
-        const reason = res.results?.find((r) => !r.ok)?.error || "delivery failed";
-        setStatus(key, "failed", `Failed — ${reason}`);
-      } else setStatus(key, "sent", `Sent to ${ok} of ${total} (some failed)`);
+        state = "failed";
+        text = `Failed — ${res.results?.find((r) => !r.ok)?.error || "delivery failed"}`;
+      } else text = `Sent to ${ok} of ${total} (some failed)`;
+      setStatus(key, state, text);
+      if (state !== "failed") persistResolve(messageId, key, state, text);
     } catch (e) {
       setStatus(key, "failed", `Failed — ${(e as Error).message}`);
     }
   }
 
-  async function approveSchedule(key: string, payload: any) {
+  async function approveSchedule(messageId: string, key: string, payload: any) {
     setStatus(key, "sending", "Scheduling…");
     try {
       await api("/tasks", {
@@ -219,12 +243,13 @@ export default function Chat() {
         body: JSON.stringify({ title: payload.title, instruction: payload.instruction, schedule: payload.schedule, runAt: payload.run_at }),
       });
       setStatus(key, "scheduled", "Scheduled");
+      persistResolve(messageId, key, "scheduled", "Scheduled");
     } catch (e) {
       setStatus(key, "failed", `Couldn't schedule — ${(e as Error).message}`);
     }
   }
 
-  async function approveMonitor(key: string, payload: any) {
+  async function approveMonitor(messageId: string, key: string, payload: any) {
     setStatus(key, "sending", "Starting monitor…");
     try {
       await api("/monitors", {
@@ -239,7 +264,9 @@ export default function Chat() {
           absenceHours: payload.absence_hours,
         }),
       });
-      setStatus(key, "scheduled", "Monitoring — I'll email you when it matches.");
+      const text = "Monitoring — I'll email you when it matches.";
+      setStatus(key, "scheduled", text);
+      persistResolve(messageId, key, "scheduled", text);
     } catch (e) {
       setStatus(key, "failed", `Couldn't start monitor — ${(e as Error).message}`);
     }
@@ -419,9 +446,9 @@ function MessageView({
   msg: Msg;
   isLast: boolean;
   actionStatus: Record<string, { state: "sending" | "sent" | "failed" | "scheduled"; text: string }>;
-  onApproveSend: (key: string, content: string, targets: any[]) => void;
-  onApproveSchedule: (key: string, payload: any) => void;
-  onApproveMonitor: (key: string, payload: any) => void;
+  onApproveSend: (messageId: string, key: string, content: string, targets: any[]) => void;
+  onApproveSchedule: (messageId: string, key: string, payload: any) => void;
+  onApproveMonitor: (messageId: string, key: string, payload: any) => void;
 }) {
   if (msg.role === "user") {
     return (
@@ -511,7 +538,7 @@ function MessageView({
               <div className="mt-2 rounded-xl bg-surface border border-line px-3 py-2.5 text-[15px] text-ink-800 whitespace-pre-wrap">{g.content}</div>
               <div className="mt-2 text-sm text-ink-500">To: {toLabel}</div>
               <div className="mt-3 flex gap-2">
-                <button onClick={() => onApproveSend(g.key, g.content, g.targets)} className="btn-primary h-10 px-4">
+                <button onClick={() => onApproveSend(msg.id, g.key, g.content, g.targets)} className="btn-primary h-10 px-4">
                   {many ? `Approve & send to all ${g.targets.length}` : "Approve & send"}
                 </button>
               </div>
@@ -538,7 +565,7 @@ function MessageView({
                 {r.schedule} · runs {new Date(r.run_at).toLocaleString()}
               </div>
               <div className="mt-3">
-                <button onClick={() => onApproveSchedule(key, r)} className="btn-primary h-10 px-4">Approve & schedule</button>
+                <button onClick={() => onApproveSchedule(msg.id, key, r)} className="btn-primary h-10 px-4">Approve & schedule</button>
               </div>
             </div>
           );
@@ -562,7 +589,7 @@ function MessageView({
                   : `Checks every ${r.interval_minutes} min · emails you only when it matches`}
               </div>
               <div className="mt-3">
-                <button onClick={() => onApproveMonitor(key, r)} className="btn-primary h-10 px-4">Approve &amp; start monitoring</button>
+                <button onClick={() => onApproveMonitor(msg.id, key, r)} className="btn-primary h-10 px-4">Approve &amp; start monitoring</button>
               </div>
             </div>
           );

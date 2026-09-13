@@ -53,7 +53,7 @@ export async function chatRoutes(app: FastifyInstance) {
     const messages = await chatMessages().find({ chatId: id }).sort({ createdAt: 1 }).toArray();
     return {
       chat: { id: chat._id, title: chat.title },
-      messages: messages.map((m) => ({ id: m._id, role: m.role, content: m.content, toolResults: m.toolResults ?? [], createdAt: m.createdAt })),
+      messages: messages.map((m) => ({ id: m._id, role: m.role, content: m.content, toolResults: m.toolResults ?? [], resolvedActions: m.resolvedActions ?? [], createdAt: m.createdAt })),
     };
   });
 
@@ -69,6 +69,27 @@ export async function chatRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     await chats().deleteOne({ _id: id, userId: req.userId! });
     await chatMessages().deleteMany({ chatId: id, userId: req.userId! });
+    return { status: "ok" };
+  });
+
+  // Persist an approval outcome so a refresh doesn't show the Approve button again.
+  app.post("/chats/:id/resolve", { preHandler: requireActivePlan }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = z
+      .object({ messageId: z.string().min(1), key: z.string().min(1).max(400), state: z.string().max(40), text: z.string().max(400) })
+      .safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: "invalid_input" });
+    await chatMessages().updateOne(
+      { _id: body.data.messageId, chatId: id, userId: req.userId! },
+      {
+        // Drop any prior resolution for this key, then record the new one.
+        $pull: { resolvedActions: { key: body.data.key } } as any,
+      },
+    );
+    await chatMessages().updateOne(
+      { _id: body.data.messageId, chatId: id, userId: req.userId! },
+      { $push: { resolvedActions: { key: body.data.key, state: body.data.state, text: body.data.text } } as any },
+    );
     return { status: "ok" };
   });
 
@@ -113,9 +134,12 @@ export async function chatRoutes(app: FastifyInstance) {
         }
       }
       for (let i = 0; i < finalText.length; i += 120) write({ type: "text_delta", delta: finalText.slice(i, i + 120) });
-      await chatMessages().insertOne({ _id: uid(), chatId: id, userId, role: "assistant", content: finalText, toolResults, createdAt: new Date() });
+      const assistantMessageId = uid();
+      await chatMessages().insertOne({ _id: assistantMessageId, chatId: id, userId, role: "assistant", content: finalText, toolResults, createdAt: new Date() });
       await chats().updateOne({ _id: id }, { $set: { lastResponseId: responseId, updatedAt: new Date() } });
-      write({ type: "completed", toolResults });
+      // Send the DB id so the client can adopt it — approvals then persist against the
+      // same id the message will have after a refresh.
+      write({ type: "completed", toolResults, messageId: assistantMessageId });
     } catch (error) {
       console.error("[chat.stream]", (error as Error).message);
       // Refund the credit we charged up-front since the turn didn't complete.

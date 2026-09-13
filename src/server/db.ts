@@ -81,6 +81,9 @@ export interface ChatMessage {
   content: string;
   steps?: { label: string; done: boolean }[];
   toolResults?: unknown[];
+  // Approvals already acted on (send/schedule/monitor), so they stay resolved after a
+  // refresh instead of showing the Approve button again. Keyed by the UI's action key.
+  resolvedActions?: { key: string; state: string; text: string }[];
   createdAt: Date;
 }
 
