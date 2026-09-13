@@ -3,6 +3,7 @@ import { scheduledTasks, users, type ScheduledTask } from "./db";
 import { streamRun } from "./agent/agent";
 import { sendToTargets, type SendTarget } from "./connectors/manager";
 import { sendEmail } from "./lib/email";
+import { runDueMonitors } from "./monitors";
 
 async function runTask(task: ScheduledTask): Promise<void> {
   const user = await users().findOne({ _id: task.userId });
@@ -62,6 +63,8 @@ export function startScheduler(): void {
     for (const task of due) {
       runTask(task).catch((error) => console.error(`[scheduler] task ${task._id} failed`, error));
     }
+    // Interval-based channel monitors (checks only those whose interval is due).
+    runDueMonitors().catch((error) => console.error("[monitors] tick failed", error));
   });
   console.log("[scheduler] started (1-minute tick)");
 }

@@ -133,6 +133,41 @@ export const tools: ToolDef[] = [
       note: "Awaiting the user's approval before scheduling.",
     }),
   },
+  {
+    name: "prepare_monitor",
+    description:
+      "Prepare a MONITOR the user must approve. Use this when the user asks to WATCH a channel and be told when something happens — e.g. 'let me know when someone asks about pricing in the Dev group', 'watch my Gmail for a reply from the bank', 'tell me if the delivery confirmation doesn't arrive by tomorrow'. RelayFlow checks on an interval (default 30 min, minimum 15) and emails the user ONLY when the condition is met — it does NOT notify on every message. Prefer this over prepare_schedule whenever the user wants ongoing watching/notifying based on a condition rather than a fixed-time action.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short title for the monitor (e.g. 'Bank reply', 'Cloth questions')." },
+        platform: { type: "string", enum: PLATFORMS, description: "Which channel to watch." },
+        group: { type: ["string", "null"], description: "A specific group/channel name to watch (e.g. 'Dev Syndicate'), or null for the platform's selected channels." },
+        condition: { type: "string", description: "In plain language, what to watch for (e.g. 'someone asks about cloth', 'a reply from the bank about my loan')." },
+        mode: {
+          type: "string",
+          enum: ["match", "absence"],
+          description: "'match' = notify when this happens. 'absence' = notify if this has NOT happened by the deadline.",
+        },
+        interval_minutes: { type: "integer", minimum: 15, maximum: 1440, description: "How often to check, in minutes. Default 30. Minimum 15." },
+        absence_hours: { type: ["number", "null"], description: "For 'absence' mode ONLY: how many hours to wait before alerting that it didn't happen. Use null for 'match' mode." },
+      },
+      required: ["title", "platform", "group", "condition", "mode", "interval_minutes", "absence_hours"],
+      additionalProperties: false,
+    },
+    handler: async (_userId, args) => ({
+      status: "pending_confirmation",
+      action: "monitor",
+      title: args.title,
+      platform: args.platform,
+      group: args.group,
+      condition: args.condition,
+      mode: args.mode === "absence" ? "absence" : "match",
+      interval_minutes: Math.max(15, Number(args.interval_minutes) || 30),
+      absence_hours: args.mode === "absence" ? args.absence_hours ?? 24 : null,
+      note: "Awaiting the user's approval before starting the monitor.",
+    }),
+  },
 ];
 
 export const toolByName = new Map(tools.map((t) => [t.name, t]));

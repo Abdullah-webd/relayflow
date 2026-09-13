@@ -224,6 +224,27 @@ export default function Chat() {
     }
   }
 
+  async function approveMonitor(key: string, payload: any) {
+    setStatus(key, "sending", "Starting monitor…");
+    try {
+      await api("/monitors", {
+        method: "POST",
+        body: JSON.stringify({
+          title: payload.title,
+          platform: payload.platform,
+          group: payload.group ?? null,
+          condition: payload.condition,
+          mode: payload.mode,
+          intervalMinutes: payload.interval_minutes,
+          absenceHours: payload.absence_hours,
+        }),
+      });
+      setStatus(key, "scheduled", "Monitoring — I'll email you when it matches.");
+    } catch (e) {
+      setStatus(key, "failed", `Couldn't start monitor — ${(e as Error).message}`);
+    }
+  }
+
   return (
     <div className="h-full flex">
       {/* Sessions */}
@@ -354,6 +375,7 @@ export default function Chat() {
                   actionStatus={actionStatus}
                   onApproveSend={approveSend}
                   onApproveSchedule={approveSchedule}
+                  onApproveMonitor={approveMonitor}
                 />
               ))}
             </div>
@@ -392,12 +414,14 @@ function MessageView({
   actionStatus,
   onApproveSend,
   onApproveSchedule,
+  onApproveMonitor,
 }: {
   msg: Msg;
   isLast: boolean;
   actionStatus: Record<string, { state: "sending" | "sent" | "failed" | "scheduled"; text: string }>;
   onApproveSend: (key: string, content: string, targets: any[]) => void;
   onApproveSchedule: (key: string, payload: any) => void;
+  onApproveMonitor: (key: string, payload: any) => void;
 }) {
   if (msg.role === "user") {
     return (
@@ -410,6 +434,7 @@ function MessageView({
   const pendingActions = (msg.toolResults || []).filter((t) => t.result?.status === "pending_confirmation");
   const sendActions = pendingActions.filter((t) => t.result?.action === "send");
   const scheduleActions = pendingActions.filter((t) => t.result?.action === "schedule");
+  const monitorActions = pendingActions.filter((t) => t.result?.action === "monitor");
 
   // Collapse pending sends by (message, platform): the SAME message going to several
   // groups on ONE channel becomes a single Approve & send; different channels stay
@@ -514,6 +539,30 @@ function MessageView({
               </div>
               <div className="mt-3">
                 <button onClick={() => onApproveSchedule(key, r)} className="btn-primary h-10 px-4">Approve & schedule</button>
+              </div>
+            </div>
+          );
+        })}
+
+        {monitorActions.map((action, i) => {
+          const key = `${msg.id}-mon-${i}`;
+          if (actionStatus[key]) return renderStatus(key);
+          const r = action.result;
+          const where = `${PLATFORM_LABEL[r.platform] || r.platform}${r.group ? ` · ${r.group}` : ""}`;
+          return (
+            <div key={key} className="mt-3 card p-4">
+              <div className="text-sm font-semibold text-ink-900">Start this monitor?</div>
+              <div className="mt-2 text-[15px] text-ink-800">{r.title}</div>
+              <div className="mt-1 text-sm text-ink-500">
+                Watch <span className="font-medium text-ink-700">{where}</span> for: “{r.condition}”
+              </div>
+              <div className="mt-0.5 text-xs text-ink-400">
+                {r.mode === "absence"
+                  ? `Alerts you if it hasn't happened within ${r.absence_hours}h · checks every ${r.interval_minutes} min`
+                  : `Checks every ${r.interval_minutes} min · emails you only when it matches`}
+              </div>
+              <div className="mt-3">
+                <button onClick={() => onApproveMonitor(key, r)} className="btn-primary h-10 px-4">Approve &amp; start monitoring</button>
               </div>
             </div>
           );

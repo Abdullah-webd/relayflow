@@ -155,6 +155,30 @@ export interface ScheduledTask {
   updatedAt: Date;
 }
 
+// A user-defined watch: RelayFlow polls a channel on an interval and emails the user
+// only when an LLM-judged condition is met (mode "match") or fails to occur by a
+// deadline (mode "absence"). NOT a real-time firehose — checks are interval-based.
+export type MonitorMode = "match" | "absence";
+export interface Monitor {
+  _id: string;
+  userId: string;
+  title: string;
+  platform: Platform;
+  group: string | null; // specific group/channel name, or null for the platform's selected channels
+  condition: string; // natural-language condition, judged by the LLM
+  mode: MonitorMode;
+  intervalMinutes: number; // how often to check (>= 15)
+  active: boolean;
+  lastCheckedAt: Date | null;
+  lastSeenAt: Date; // watermark: only consider messages strictly newer than this
+  absenceDeadline: Date | null; // for "absence" mode: fire the "didn't happen" alert after this
+  expiresAt: Date | null; // optional auto-stop
+  notified: string[]; // bounded dedup keys of already-notified matches
+  lastResult: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // Baileys auth-state key/value store (encrypted), keyed by connection.
 export interface WhatsAppAuth {
   _id: string; // `${connectionId}:${keyId}`
@@ -191,6 +215,7 @@ export const destinations = () => db().collection<Destination>("destinations");
 export const channelMessages = () => db().collection<ChannelMessage>("channel_messages");
 export const outbound = () => db().collection<Outbound>("outbound");
 export const scheduledTasks = () => db().collection<ScheduledTask>("scheduled_tasks");
+export const monitors = () => db().collection<Monitor>("monitors");
 export const whatsappAuth = () => db().collection<WhatsAppAuth>("whatsapp_auth");
 export const appConfig = () => db().collection<AppConfig>("app_config");
 
@@ -233,6 +258,8 @@ async function ensureIndexes(d: Db): Promise<void> {
   await safeIndex(d, "channel_messages", { occurredAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 14 });
   await safeIndex(d, "outbound", { userId: 1, createdAt: -1 });
   await safeIndex(d, "scheduled_tasks", { userId: 1, active: 1 });
+  await safeIndex(d, "monitors", { active: 1, lastCheckedAt: 1 });
+  await safeIndex(d, "monitors", { userId: 1 });
   await safeIndex(d, "whatsapp_auth", { connectionId: 1 });
 }
 

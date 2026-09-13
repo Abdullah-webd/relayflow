@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
-import { Clock, Trash2, Plus } from "lucide-react";
+import { Clock, Trash2, Plus, Eye } from "lucide-react";
 
 interface Task {
   id: string;
@@ -12,16 +12,43 @@ interface Task {
   lastRunAt: string | null;
 }
 
+interface Monitor {
+  id: string;
+  title: string;
+  platform: string;
+  group: string | null;
+  condition: string;
+  mode: "match" | "absence";
+  intervalMinutes: number;
+  active: boolean;
+  lastCheckedAt: string | null;
+  lastResult: string | null;
+}
+
+const PLATFORM_LABEL: Record<string, string> = { whatsapp: "WhatsApp", telegram: "Telegram", slack: "Slack", gmail: "Gmail" };
+
 export default function Tasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [monitors, setMonitors] = useState<Monitor[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: "", instruction: "", schedule: "daily", runAt: "" });
   const [err, setErr] = useState<string | null>(null);
 
   const load = async () => setTasks((await api<{ tasks: Task[] }>("/tasks")).tasks);
+  const loadMonitors = async () => setMonitors((await api<{ monitors: Monitor[] }>("/monitors")).monitors);
   useEffect(() => {
     load();
+    loadMonitors();
   }, []);
+
+  async function toggleMonitor(m: Monitor) {
+    await api(`/monitors/${m.id}`, { method: "PATCH", body: JSON.stringify({ active: !m.active }) });
+    loadMonitors();
+  }
+  async function removeMonitor(id: string) {
+    await api(`/monitors/${id}`, { method: "DELETE" });
+    loadMonitors();
+  }
 
   async function create() {
     setErr(null);
@@ -114,6 +141,45 @@ export default function Tasks() {
               </button>
             </div>
           ))}
+        </div>
+
+        {/* Monitors */}
+        <div className="mt-10">
+          <h2 className="text-xl font-bold text-ink-900">Monitors</h2>
+          <p className="mt-1 text-ink-500">
+            Ask the agent to “let me know when someone asks about X on WhatsApp” — it checks on an interval and emails you only when it matches.
+          </p>
+          <div className="mt-4 space-y-3">
+            {monitors.length === 0 && <p className="text-ink-400 py-6 text-center">No monitors yet. Set one up from chat.</p>}
+            {monitors.map((m) => (
+              <div key={m.id} className="card p-4 flex items-center gap-4">
+                <span className="grid place-items-center h-10 w-10 rounded-xl bg-accent-400/10 text-accent-600 shrink-0">
+                  <Eye size={18} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-ink-900 truncate">{m.title}</div>
+                  <div className="text-sm text-ink-500 truncate">
+                    {PLATFORM_LABEL[m.platform] || m.platform}
+                    {m.group ? ` · ${m.group}` : ""} — “{m.condition}”
+                  </div>
+                  <div className="text-xs text-ink-400 mt-0.5">
+                    {m.mode === "absence" ? "Absence alert" : "Notify on match"} · every {m.intervalMinutes} min
+                    {m.lastCheckedAt && ` · last checked ${new Date(m.lastCheckedAt).toLocaleString()}`}
+                    {m.lastResult && ` · ${m.lastResult}`}
+                  </div>
+                </div>
+                <button
+                  onClick={() => toggleMonitor(m)}
+                  className={`text-xs font-semibold px-2.5 py-1 rounded-full ${m.active ? "bg-emerald-50 text-emerald-700" : "bg-ink-100 text-ink-500"}`}
+                >
+                  {m.active ? "Active" : "Paused"}
+                </button>
+                <button onClick={() => removeMonitor(m.id)} className="text-ink-400 hover:text-red-500">
+                  <Trash2 size={17} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
