@@ -31,6 +31,8 @@ export const env = {
 
   openaiApiKey: str("OPENAI_API_KEY"),
   openaiModel: str("OPENAI_MODEL", "gpt-4o"),
+  // Optional OpenAI-compatible base URL (e.g. DeepSeek) — lets us swap providers by config.
+  openaiBaseUrl: str("OPENAI_BASE_URL"),
 
   resendApiKey: str("RESEND_API_KEY"),
   resendFrom: str("RESEND_FROM_EMAIL", "RelayFlow <onboarding@resend.dev>"),

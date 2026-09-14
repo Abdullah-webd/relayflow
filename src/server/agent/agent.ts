@@ -2,7 +2,9 @@ import OpenAI from "openai";
 import { env } from "../env";
 import { toolByName, toolSchemas } from "./tools";
 
-const client = env.openaiApiKey ? new OpenAI({ apiKey: env.openaiApiKey, timeout: 180_000, maxRetries: 1 }) : null;
+const client = env.openaiApiKey
+  ? new OpenAI({ apiKey: env.openaiApiKey, timeout: 180_000, maxRetries: 1, ...(env.openaiBaseUrl ? { baseURL: env.openaiBaseUrl } : {}) })
+  : null;
 
 const SYSTEM = `You are RelayFlow — a single AI operations agent that has 360° access to the user's connected business messaging channels (WhatsApp, Telegram, Slack, Gmail).
 
@@ -28,7 +30,7 @@ How to behave:
 
 export type AgentEvent =
   | { type: "activity"; phase: "think" | "start" | "done"; label: string }
-  | { type: "final"; text: string; responseId: string | null; toolResults: unknown[] };
+  | { type: "final"; text: string; responseId: string | null; toolResults: unknown[]; usage?: { inputTokens: number; outputTokens: number } };
 
 function startLabel(name: string, args: any): string {
   if (name === "list_connections") return "Checking your connected channels…";
@@ -71,6 +73,13 @@ export async function* streamRun(
 
   yield { type: "activity", phase: "think", label: "Reviewing your request…" };
 
+  let inputTokens = 0;
+  let outputTokens = 0;
+  const track = (r: any) => {
+    inputTokens += r?.usage?.input_tokens ?? 0;
+    outputTokens += r?.usage?.output_tokens ?? 0;
+  };
+
   let response: any = await client.responses.create({
     model: env.openaiModel,
     instructions,
@@ -78,6 +87,7 @@ export async function* streamRun(
     tools: toolSchemas as any,
     ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
   });
+  track(response);
 
   const toolResults: unknown[] = [];
   for (let round = 0; round < 8; round++) {
@@ -112,9 +122,10 @@ export async function* streamRun(
       input: followups,
       tools: toolSchemas as any,
     });
+    track(response);
   }
 
-  yield { type: "final", text: response.output_text ?? "", responseId: response.id ?? null, toolResults };
+  yield { type: "final", text: response.output_text ?? "", responseId: response.id ?? null, toolResults, usage: { inputTokens, outputTokens } };
 }
 
 /**
