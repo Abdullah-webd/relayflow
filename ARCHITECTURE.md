@@ -266,7 +266,94 @@ MongoDB holds a few "collections" (think: labelled drawers):
 
 ---
 
-## 14. Mini-glossary for newcomers
+## 14. 🆕 Proposed feature: Knowledge Base + Auto-Reply
+
+> **Status: designed, not yet built.** This section is the plan so you can see how it will work before we implement it.
+
+### What it is (plain English)
+Today RelayFlow answers **you** in the chat. This feature lets it answer **your customers** — automatically, on the channels you choose, using facts **you** give it.
+
+A company adds a **Knowledge tab**, uploads or types their facts (products in stock, prices, opening hours, address, terms), writes **guardrails** ("answer product & pricing questions; never discuss refunds or give legal advice"), and flips on **auto-reply** for the channels they want. From then on, when a customer messages one of those channels, RelayFlow reads the message, checks the knowledge base, and — **only if it's confident the answer is in there and allowed** — replies on its own. If it's unsure, it stays quiet and leaves it for a human.
+
+**The golden rule of this feature: silence beats a wrong answer.** A confident, grounded reply goes out; anything doubtful is left alone.
+
+### Setup — the Knowledge tab
+
+```mermaid
+flowchart TD
+  O["Company owner"] --> KT["New: Knowledge tab"]
+  KT --> U1["Upload a PDF<br/>(we extract the text)"]
+  KT --> U2["Paste text<br/>(products, hours, address, T&Cs)"]
+  KT --> G["Write guardrails<br/>'answer pricing & hours;<br/>never discuss refunds'"]
+  KT --> CH["Toggle auto-reply per channel<br/>(only the ones you pick)"]
+  U1 --> S["Save"]
+  U2 --> S
+  G --> S
+  CH --> S
+  S --> KB[("Knowledge base<br/>stored + searchable")]
+```
+
+### The auto-reply pipeline (where the safety lives)
+
+```mermaid
+flowchart TD
+  M["Customer message arrives on an<br/>auto-reply-enabled channel"] --> F{"From a real person?<br/>(not us, not the AI,<br/>not a repeat, within rate limit)"}
+  F -- "no" --> X["Ignore"]
+  F -- "yes" --> R["Find the most relevant facts<br/>from the knowledge base"]
+  R --> J["AI decides:<br/>1) Can I answer confidently<br/>   FROM these facts?<br/>2) Do the guardrails allow it?"]
+  J -- "not confident / not allowed" --> Q["Stay silent<br/>(optionally ping the owner:<br/>'a question I couldn't answer came in')"]
+  J -- "confident AND allowed" --> A["Send the grounded reply<br/>automatically, then log it"]
+```
+
+The AI is told: **only use the provided facts. If the answer isn't clearly in them, do not answer.** That's what stops it from making things up to a real customer.
+
+### Where it plugs into each channel
+
+```mermaid
+flowchart LR
+  WA["WhatsApp<br/>(live socket)"] -->|"real-time"| P["Auto-reply pipeline"]
+  TG["Telegram"] -->|"near-real-time<br/>(polled)"| P
+  SL["Slack"] -->|"near-real-time<br/>(polled)"| P
+  GM["Gmail"] -->|"near-real-time<br/>(polled)"| P
+  P --> KB[("Knowledge base<br/>+ guardrails")]
+```
+
+**Honest note on "real-time":** WhatsApp already has a live connection, so it's truly instant. Telegram/Slack/Gmail would start as **near-real-time** (checked on a short interval, reusing the same engine that powers monitors), and can become fully live later. So auto-reply on WhatsApp is the strongest first version.
+
+### What gets stored
+
+| New drawer | What's in it |
+|---|---|
+| `knowledge_base` | the guardrails/instructions + settings, per company |
+| `knowledge_docs` | each uploaded/typed document's text (and, in Phase 2, searchable "chunks") |
+| `connections` (existing, +field) | `autoReplyEnabled` on/off per channel, plus a mode (see below) |
+| `auto_replies` | a log of every incoming question, the reply, and the confidence — so you can audit what the AI said |
+
+### How it finds the right facts (retrieval)
+- **Phase 1 (simple):** if the knowledge is small (a few pages), we hand the AI the **whole knowledge base** with each question. Easy, works immediately.
+- **Phase 2 (scales):** for big knowledge bases, we split documents into chunks, turn them into **embeddings** (numerical meaning), and use **MongoDB Atlas Vector Search** to fetch only the few most relevant chunks per question. This keeps it fast and cheap even with hundreds of pages. (We already use Atlas, so this is a natural upgrade.)
+
+### Safety & the "don't be reckless" design
+Auto-reply means the AI sends **without you approving each message** — that's the point, and you opted in per channel. So the protections are:
+- **Confidence gate** — replies only when the answer is clearly grounded in your facts; otherwise silent.
+- **Guardrails** — your "answer this / never that" rules are enforced every time.
+- **No loops** — it never replies to its own messages or your outgoing ones; rate-limited and de-duplicated so one customer never gets spammed.
+- **Full log** — every auto-reply is recorded so you can review what it said.
+- **Optional "Suggest mode"** — for cautious companies: instead of sending, it **drafts** the reply and notifies you to approve (best of both worlds while you build trust).
+- **Credits** — each incoming message on an auto-reply channel may use a credit (an AI check), so cost scales with volume.
+
+### Suggested phases
+- **Phase 1 (MVP):** Knowledge tab (paste text + PDF upload → extracted text) · guardrails · per-channel toggle · **WhatsApp** real-time auto-reply · whole-KB-in-prompt · confidence gate · logging.
+- **Phase 2:** Atlas Vector Search (big KBs) · auto-reply on Telegram/Slack/Gmail · "Suggest vs Auto" mode · owner notifications · a simple analytics view (answered / skipped).
+
+### Open decisions (for you to pick before we build)
+1. **DMs or groups?** Customer support is usually **1:1 direct messages**. RelayFlow currently reads WhatsApp **group** messages — supporting 1:1 customer chats is a small connector change we'd add for this. Which do you want first?
+2. **Auto-send or Suggest-first?** Full auto from day one, or start in "suggest & approve" mode for safety?
+3. **When unsure:** stay completely silent, or silently **notify you** that a question came in that it couldn't answer?
+
+---
+
+## 15. Mini-glossary for newcomers
 
 - **Frontend / backend** — the part you see (frontend) vs. the engine behind it (backend).
 - **API** — the set of "doors" the website knocks on to ask the server to do things.
