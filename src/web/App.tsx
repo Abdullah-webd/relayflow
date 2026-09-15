@@ -10,6 +10,7 @@ import Reset from "./pages/auth/Reset";
 import AppLayout from "./pages/app/AppLayout";
 import Chat from "./pages/app/Chat";
 import Connections from "./pages/app/Connections";
+import Knowledge from "./pages/app/Knowledge";
 import Tasks from "./pages/app/Tasks";
 import Settings from "./pages/app/Settings";
 import { type ReactNode } from "react";
@@ -65,6 +66,7 @@ export default function App() {
             the component and wipe the in-progress message state. */}
         <Route path="chat/:chatId?" element={<Chat />} />
         <Route path="connections" element={<Connections />} />
+        <Route path="knowledge" element={<Knowledge />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="settings" element={<Settings />} />
       </Route>

@@ -4,6 +4,7 @@ import { streamRun } from "./agent/agent";
 import { sendToTargets, type SendTarget } from "./connectors/manager";
 import { sendEmail } from "./lib/email";
 import { runDueMonitors } from "./monitors";
+import { runAutoReplyTick } from "./knowledge/autoReplyPoller";
 
 async function runTask(task: ScheduledTask): Promise<void> {
   const user = await users().findOne({ _id: task.userId });
@@ -65,6 +66,8 @@ export function startScheduler(): void {
     }
     // Interval-based channel monitors (checks only those whose interval is due).
     runDueMonitors().catch((error) => console.error("[monitors] tick failed", error));
+    // Auto-reply: answer new inbound messages on enabled channels from the knowledge base.
+    runAutoReplyTick().catch((error) => console.error("[auto-reply] tick failed", error));
   });
   console.log("[scheduler] started (1-minute tick)");
 }

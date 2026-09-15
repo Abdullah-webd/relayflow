@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Plug,
   Clock,
+  BookOpen,
   Settings as Gear,
   LogOut,
   PanelLeftClose,
@@ -18,6 +19,7 @@ import {
 const items = [
   { to: "/app/chat", label: "Chat", icon: MessageSquare },
   { to: "/app/connections", label: "Connections", icon: Plug },
+  { to: "/app/knowledge", label: "Knowledge", icon: BookOpen },
   { to: "/app/tasks", label: "Scheduled", icon: Clock },
   { to: "/app/settings", label: "Settings", icon: Gear },
 ];

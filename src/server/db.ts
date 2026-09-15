@@ -97,6 +97,10 @@ export interface Connection {
   encryptedCredentials: string | null;
   lastError: string | null;
   heartbeatAt: Date | null;
+  // Auto-reply: when enabled, the AI answers incoming messages on this channel from the
+  // knowledge base (only when confident). Watermark tracks what we've already handled.
+  autoReplyEnabled?: boolean;
+  autoReplyLastSeenAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -182,6 +186,42 @@ export interface Monitor {
   updatedAt: Date;
 }
 
+// A company's knowledge base: guardrails (what to answer / never answer) — one per user.
+export interface KnowledgeBase {
+  _id: string; // = userId (one per user)
+  userId: string;
+  guardrails: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// A single uploaded/typed knowledge document (its extracted plain text).
+export interface KnowledgeDoc {
+  _id: string;
+  userId: string;
+  title: string;
+  source: "pdf" | "text";
+  text: string;
+  chars: number;
+  createdAt: Date;
+}
+
+// An audit log of every auto-reply decision (sent or skipped).
+export interface AutoReply {
+  _id: string;
+  userId: string;
+  platform: Platform;
+  connectionId: string;
+  destinationExternalId: string;
+  destinationName: string;
+  incomingFrom: string;
+  incomingText: string;
+  replied: boolean;
+  replyText: string | null;
+  reason: string | null; // why it stayed silent, when it did
+  createdAt: Date;
+}
+
 // Baileys auth-state key/value store (encrypted), keyed by connection.
 export interface WhatsAppAuth {
   _id: string; // `${connectionId}:${keyId}`
@@ -219,6 +259,9 @@ export const channelMessages = () => db().collection<ChannelMessage>("channel_me
 export const outbound = () => db().collection<Outbound>("outbound");
 export const scheduledTasks = () => db().collection<ScheduledTask>("scheduled_tasks");
 export const monitors = () => db().collection<Monitor>("monitors");
+export const knowledgeBase = () => db().collection<KnowledgeBase>("knowledge_base");
+export const knowledgeDocs = () => db().collection<KnowledgeDoc>("knowledge_docs");
+export const autoReplies = () => db().collection<AutoReply>("auto_replies");
 export const whatsappAuth = () => db().collection<WhatsAppAuth>("whatsapp_auth");
 export const appConfig = () => db().collection<AppConfig>("app_config");
 
@@ -263,6 +306,8 @@ async function ensureIndexes(d: Db): Promise<void> {
   await safeIndex(d, "scheduled_tasks", { userId: 1, active: 1 });
   await safeIndex(d, "monitors", { active: 1, lastCheckedAt: 1 });
   await safeIndex(d, "monitors", { userId: 1 });
+  await safeIndex(d, "knowledge_docs", { userId: 1, createdAt: -1 });
+  await safeIndex(d, "auto_replies", { userId: 1, createdAt: -1 });
   await safeIndex(d, "whatsapp_auth", { connectionId: 1 });
 }
 
