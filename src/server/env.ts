@@ -36,6 +36,7 @@ export const env = {
 
   resendApiKey: str("RESEND_API_KEY"),
   resendFrom: str("RESEND_FROM_EMAIL", "RelayFlow <onboarding@resend.dev>"),
+  resendReplyTo: str("RESEND_REPLY_TO"),
 
   google: {
     clientId: str("GOOGLE_OAUTH_CLIENT_ID"),

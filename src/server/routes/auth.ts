@@ -4,7 +4,7 @@ import { z } from "zod";
 import { authCodes, users, type User } from "../db";
 import { env } from "../env";
 import { randomOtp, sha256, uid } from "../lib/crypto";
-import { sendEmail } from "../lib/email";
+import { sendEmail, brandedEmail } from "../lib/email";
 import { createSession, destroyAllSessions, destroySession } from "../auth/session";
 import {
   SESSION_COOKIE,
@@ -60,13 +60,20 @@ async function consumeOtp(userId: string, purpose: "verify_email" | "password_re
 }
 
 async function deliverOtp(email: string, code: string, purpose: "verify_email" | "password_reset") {
+  const what = purpose === "verify_email" ? "verification" : "password reset";
   const subject = purpose === "verify_email" ? "Your RelayFlow verification code" : "Your RelayFlow password reset code";
   const body =
-    `Your RelayFlow ${purpose === "verify_email" ? "verification" : "password reset"} code is:\n\n` +
+    `Your RelayFlow ${what} code is:\n\n` +
     `    ${code}\n\n` +
     `It expires in 10 minutes. If you didn't request this, you can ignore this email.`;
+  const html = brandedEmail(
+    `Your ${what} code`,
+    `<p style="margin:0 0 16px">Enter this code in RelayFlow to continue:</p>
+     <div style="font-size:34px;font-weight:800;letter-spacing:8px;color:#101828;background:#f7f8fb;border:1px solid #e7eaf0;border-radius:12px;padding:16px;text-align:center">${code}</div>
+     <p style="margin:16px 0 0;color:#98a2b3;font-size:13px">This code expires in 10 minutes. If you didn't request it, you can safely ignore this email.</p>`,
+  );
   try {
-    await sendEmail(email, subject, body);
+    await sendEmail(email, subject, body, html);
   } catch (error) {
     console.error(`[auth] email delivery failed for ${email}: ${(error as Error).message}`);
     // In non-production, log the code so local testing can proceed if email is down.
