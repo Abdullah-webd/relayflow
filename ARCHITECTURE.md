@@ -301,7 +301,7 @@ flowchart TD
   F -- "no" --> X["Ignore"]
   F -- "yes" --> R["Find the most relevant facts<br/>from the knowledge base"]
   R --> J["AI decides:<br/>1) Can I answer confidently<br/>   FROM these facts?<br/>2) Do the guardrails allow it?"]
-  J -- "not confident / not allowed" --> Q["Stay silent<br/>(optionally ping the owner:<br/>'a question I couldn't answer came in')"]
+  J -- "not confident / not allowed" --> Q["Stay silent — leave it for the<br/>humans already on the channel<br/>(no emails, no alerts)"]
   J -- "confident AND allowed" --> A["Send the grounded reply<br/>automatically, then log it"]
 ```
 
@@ -338,18 +338,20 @@ Auto-reply means the AI sends **without you approving each message** — that's 
 - **Confidence gate** — replies only when the answer is clearly grounded in your facts; otherwise silent.
 - **Guardrails** — your "answer this / never that" rules are enforced every time.
 - **No loops** — it never replies to its own messages or your outgoing ones; rate-limited and de-duplicated so one customer never gets spammed.
-- **Full log** — every auto-reply is recorded so you can review what it said.
-- **Optional "Suggest mode"** — for cautious companies: instead of sending, it **drafts** the reply and notifies you to approve (best of both worlds while you build trust).
+- **Full log** — every auto-reply is recorded so you can review what it said (in the Knowledge tab).
+- **Quiet when unsure — on purpose.** It does **not** email or alert you for questions it can't answer. RelayFlow **augments** your team; it doesn't replace them. The people on the channel are still there and will see anything the AI left alone — peppering them with "couldn't answer" emails would be noise, so we don't.
 - **Credits** — each incoming message on an auto-reply channel may use a credit (an AI check), so cost scales with volume.
+- **"Suggest mode" (future option)** — a later toggle to have it draft and wait for approval instead of sending, for companies that want to ease in.
+
+### Decided (locked in)
+- **Groups, exactly as today — no DM change.** Auto-reply runs inside the **selected groups** on each connected channel. Nothing about how channels connect changes.
+- **Full auto** from day one: confident, grounded replies send immediately (no per-message approval).
+- **When unsure → stay completely silent. No emails, no alerts.** The humans on the channel handle anything the AI can't. RelayFlow augments the team, it doesn't replace them.
+- **All four channels.** WhatsApp is truly real-time (live socket); Telegram/Slack/Gmail are near-real-time (short polling, same engine as monitors).
 
 ### Suggested phases
-- **Phase 1 (MVP):** Knowledge tab (paste text + PDF upload → extracted text) · guardrails · per-channel toggle · **WhatsApp** real-time auto-reply · whole-KB-in-prompt · confidence gate · logging.
-- **Phase 2:** Atlas Vector Search (big KBs) · auto-reply on Telegram/Slack/Gmail · "Suggest vs Auto" mode · owner notifications · a simple analytics view (answered / skipped).
-
-### Open decisions (for you to pick before we build)
-1. **DMs or groups?** Customer support is usually **1:1 direct messages**. RelayFlow currently reads WhatsApp **group** messages — supporting 1:1 customer chats is a small connector change we'd add for this. Which do you want first?
-2. **Auto-send or Suggest-first?** Full auto from day one, or start in "suggest & approve" mode for safety?
-3. **When unsure:** stay completely silent, or silently **notify you** that a question came in that it couldn't answer?
+- **Phase 1 (MVP):** Knowledge tab (paste text + PDF upload → extracted text) · guardrails · per-channel auto-reply toggle · **WhatsApp** real-time auto-reply · whole-KB-in-prompt · confidence gate · silent-when-unsure · reply log.
+- **Phase 2:** near-real-time auto-reply on Telegram/Slack/Gmail · Atlas Vector Search for large knowledge bases · optional "Suggest mode" · a simple analytics view (answered / skipped).
 
 ---
 
