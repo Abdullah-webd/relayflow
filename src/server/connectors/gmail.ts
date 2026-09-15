@@ -73,22 +73,40 @@ export async function completeGmailOAuth(userId: string, code: string): Promise<
   return connectionId;
 }
 
+// An expired/revoked Google token (or lost scope) — the user must reconnect Gmail.
+function isGmailAuthError(error: unknown): boolean {
+  const e = error as any;
+  const msg = (e?.message || e?.response?.data?.error || "").toString().toLowerCase();
+  return e?.code === 401 || e?.response?.status === 401 || /invalid_grant|invalid_credentials|unauthorized|no refresh token|invalid authentication/.test(msg);
+}
+
 export async function fetchGmailRecent(
   connectionId: string,
   limit: number,
 ): Promise<{ senderName: string; text: string; occurredAt: Date }[]> {
-  const gmail = await gmailFor(connectionId);
-  const list = await gmail.users.messages.list({ userId: "me", q: "newer_than:7d -in:spam -in:trash", maxResults: limit });
-  const out: { senderName: string; text: string; occurredAt: Date }[] = [];
-  for (const ref of list.data.messages ?? []) {
-    const msg = await gmail.users.messages.get({ userId: "me", id: ref.id!, format: "metadata", metadataHeaders: ["From", "Subject", "Date"] });
-    const headers = msg.data.payload?.headers ?? [];
-    const from = headers.find((h) => h.name === "From")?.value || "Unknown sender";
-    const subject = headers.find((h) => h.name === "Subject")?.value || "(no subject)";
-    const occurredAt = new Date(Number(msg.data.internalDate ?? Date.now()));
-    out.push({ senderName: from, text: `${subject} — ${msg.data.snippet ?? ""}`, occurredAt });
+  try {
+    const gmail = await gmailFor(connectionId);
+    const list = await gmail.users.messages.list({ userId: "me", q: "newer_than:7d -in:spam -in:trash", maxResults: limit });
+    const out: { senderName: string; text: string; occurredAt: Date }[] = [];
+    for (const ref of list.data.messages ?? []) {
+      const msg = await gmail.users.messages.get({ userId: "me", id: ref.id!, format: "metadata", metadataHeaders: ["From", "Subject", "Date"] });
+      const headers = msg.data.payload?.headers ?? [];
+      const from = headers.find((h) => h.name === "From")?.value || "Unknown sender";
+      const subject = headers.find((h) => h.name === "Subject")?.value || "(no subject)";
+      const occurredAt = new Date(Number(msg.data.internalDate ?? Date.now()));
+      out.push({ senderName: from, text: `${subject} — ${msg.data.snippet ?? ""}`, occurredAt });
+    }
+    return out.reverse();
+  } catch (error) {
+    // Surface a dead token: flip the connection to "error" so the UI shows a Reconnect
+    // action and monitors can report why they went quiet — instead of failing silently.
+    if (isGmailAuthError(error)) {
+      await connections()
+        .updateOne({ _id: connectionId }, { $set: { status: "error", lastError: "Gmail sign-in expired — reconnect Gmail", updatedAt: new Date() } })
+        .catch(() => undefined);
+    }
+    throw error;
   }
-  return out.reverse();
 }
 
 export async function sendGmail(connectionId: string, to: string, subject: string, body: string): Promise<string | null> {

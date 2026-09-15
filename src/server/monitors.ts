@@ -1,4 +1,4 @@
-import { monitors, users, type Monitor, type Platform } from "./db";
+import { monitors, users, connections, type Monitor, type Platform } from "./db";
 import { getRecentMessages } from "./connectors/manager";
 import { judgeMonitor } from "./agent/monitorJudge";
 import { sendEmail } from "./lib/email";
@@ -23,6 +23,17 @@ async function notify(m: Monitor, subject: string, body: string): Promise<void> 
 
 async function runMonitor(m: Monitor): Promise<void> {
   const now = new Date();
+
+  // If the channel isn't actually connected (e.g. Gmail token expired), say so plainly
+  // in the monitor's status instead of silently finding "nothing".
+  const liveConn = await connections().findOne({ userId: m.userId, platform: m.platform, status: "connected" });
+  if (!liveConn) {
+    await monitors().updateOne(
+      { _id: m._id },
+      { $set: { lastCheckedAt: now, updatedAt: now, lastResult: `Paused — ${m.platform} needs reconnecting (check the Connections tab)` } },
+    );
+    return;
+  }
 
   // Read a recent slice for the target (reuses the same fetch the agent uses; works for
   // all 4 channels). Only consider messages strictly newer than our watermark, and never
