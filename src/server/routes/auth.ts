@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { authCodes, users, type User } from "../db";
+import { env } from "../env";
 import { randomOtp, sha256, uid } from "../lib/crypto";
 import { sendEmail } from "../lib/email";
 import { createSession, destroyAllSessions, destroySession } from "../auth/session";
@@ -26,6 +27,7 @@ function publicUser(user: User) {
     credits: user.credits ?? 0,
     trialEndsAt: user.trialEndsAt ?? null,
     currentPeriodEnd: user.currentPeriodEnd ?? null,
+    paywallDisabled: env.paywallDisabled,
   };
 }
 

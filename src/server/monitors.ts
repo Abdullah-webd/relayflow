@@ -50,7 +50,7 @@ async function runMonitor(m: Monitor): Promise<void> {
   // Cheap-and-safe optimization: if nothing new arrived, don't spend an LLM call.
   let judged = { matched: false, summary: "" };
   if (fresh.length > 0) {
-    if (env.stripe.enabled) {
+    if (env.creditsEnforced) {
       const paid = await tryConsumeCredits(m.userId, CREDITS_PER_MESSAGE);
       if (!paid) {
         // Out of credits: don't advance the watermark, so these messages get judged once

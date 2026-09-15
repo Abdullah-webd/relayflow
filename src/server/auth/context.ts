@@ -40,6 +40,8 @@ export async function requireActivePlan(req: FastifyRequest, reply: FastifyReply
   const user = await users().findOne({ _id: userId });
   if (!user) return void (await reply.code(401).send({ error: "unauthorized" }));
   if (!user.emailVerified) return void (await reply.code(403).send({ error: "email_unverified" }));
+  // Launch mode: verified users get in without a subscription.
+  if (env.paywallDisabled) return;
   if (!isActiveStatus(user.subscriptionStatus)) {
     return void (await reply.code(402).send({ error: "subscription_required", detail: "An active plan or trial is required." }));
   }

@@ -103,7 +103,7 @@ export async function handleInbound(msg: InboundMessage): Promise<{ replied: boo
     if (!hasContent) return { replied: false, reason: "no knowledge base" };
 
     // Each decision costs one credit (an AI action).
-    if (env.stripe.enabled) {
+    if (env.creditsEnforced) {
       const paid = await tryConsumeCredits(msg.userId, CREDITS_PER_MESSAGE);
       if (!paid) return { replied: false, reason: "out of credits" };
     }

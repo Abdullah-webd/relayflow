@@ -61,6 +61,13 @@ export const env = {
       return this.secretKey.startsWith("sk_");
     },
   },
+  // Temporary launch switch: when true, verified users get full access without paying,
+  // and AI credits are not enforced. Set PAYWALL_DISABLED=true to open the app; remove it
+  // (or set false) to turn the paywall back on — no code changes needed.
+  paywallDisabled: str("PAYWALL_DISABLED").toLowerCase() === "true",
+  get creditsEnforced(): boolean {
+    return this.stripe.enabled && !this.paywallDisabled;
+  },
 };
 
 export type Env = typeof env;

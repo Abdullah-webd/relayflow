@@ -14,10 +14,13 @@ export interface User {
   credits: number;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  paywallDisabled?: boolean;
 }
 
 export function hasActivePlan(u: User | null): boolean {
-  return !!u && (u.subscriptionStatus === "trialing" || u.subscriptionStatus === "active");
+  if (!u) return false;
+  if (u.paywallDisabled) return true; // launch mode: everyone gets in
+  return u.subscriptionStatus === "trialing" || u.subscriptionStatus === "active";
 }
 
 interface AuthState {
