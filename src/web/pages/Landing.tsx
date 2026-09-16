@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Logo } from "../components/Logo";
+import { useAuth } from "../lib/auth";
 import {
   MessageSquare,
   Send,
@@ -222,6 +223,8 @@ function CustomerMarquee() {
 export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const { user, loading } = useAuth();
+  const loggedIn = !!user && !loading; // already signed in → send them to the dashboard
 
   return (
     <div className="min-h-full bg-white text-ink-800 overflow-x-hidden">
@@ -247,15 +250,23 @@ export default function Landing() {
           </nav>
 
           <div className="hidden md:flex items-center gap-2">
-            <Link
-              to="/login"
-              className="text-[15px] font-semibold text-ink-700 hover:text-ink-900 px-3 py-2"
-            >
-              Sign in
-            </Link>
-            <Link to="/signup" className="btn-primary h-10 px-4">
-              Get started
-            </Link>
+            {loggedIn ? (
+              <Link to="/app" className="btn-primary h-10 px-4">
+                Dashboard <ArrowRight size={16} />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/login"
+                  className="text-[15px] font-semibold text-ink-700 hover:text-ink-900 px-3 py-2"
+                >
+                  Sign in
+                </Link>
+                <Link to="/signup" className="btn-primary h-10 px-4">
+                  Get started
+                </Link>
+              </>
+            )}
           </div>
 
           <button
@@ -284,20 +295,28 @@ export default function Landing() {
                 </a>
               ))}
               <div className="h-px bg-line my-2" />
-              <Link
-                to="/login"
-                onClick={() => setMenuOpen(false)}
-                className="btn-ghost h-12 w-full"
-              >
-                Sign in
-              </Link>
-              <Link
-                to="/signup"
-                onClick={() => setMenuOpen(false)}
-                className="btn-primary h-12 w-full"
-              >
-                Get started
-              </Link>
+              {loggedIn ? (
+                <Link to="/app" onClick={() => setMenuOpen(false)} className="btn-primary h-12 w-full">
+                  Go to dashboard
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    onClick={() => setMenuOpen(false)}
+                    className="btn-ghost h-12 w-full"
+                  >
+                    Sign in
+                  </Link>
+                  <Link
+                    to="/signup"
+                    onClick={() => setMenuOpen(false)}
+                    className="btn-primary h-12 w-full"
+                  >
+                    Get started
+                  </Link>
+                </>
+              )}
             </nav>
           </div>
         )}
@@ -329,12 +348,20 @@ export default function Landing() {
                 message everywhere. It always asks before it sends.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <Link to="/signup" className="btn-primary h-12 px-6 text-base">
-                  Start free trial <ArrowRight size={18} />
-                </Link>
-                <Link to="/login" className="btn-ghost h-12 px-6 text-base">
-                  Sign in
-                </Link>
+                {loggedIn ? (
+                  <Link to="/app" className="btn-primary h-12 px-6 text-base">
+                    Go to dashboard <ArrowRight size={18} />
+                  </Link>
+                ) : (
+                  <>
+                    <Link to="/signup" className="btn-primary h-12 px-6 text-base">
+                      Start free trial <ArrowRight size={18} />
+                    </Link>
+                    <Link to="/login" className="btn-ghost h-12 px-6 text-base">
+                      Sign in
+                    </Link>
+                  </>
+                )}
               </div>
               <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink-500">
                 {channels.map((c) => (
@@ -607,18 +634,29 @@ export default function Landing() {
                 Connect your first channel in under a minute. Start your 1-day free trial.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-                <Link
-                  to="/signup"
-                  className="btn-primary h-12 px-7 text-base bg-white text-ink-900 hover:bg-white/90 shadow-none"
-                >
-                  Get started free <ArrowRight size={18} />
-                </Link>
-                <Link
-                  to="/login"
-                  className="btn-ghost h-12 px-7 text-base border-white/20 text-white hover:bg-white/10"
-                >
-                  Sign in
-                </Link>
+                {loggedIn ? (
+                  <Link
+                    to="/app"
+                    className="btn-primary h-12 px-7 text-base bg-white text-ink-900 hover:bg-white/90 shadow-none"
+                  >
+                    Go to dashboard <ArrowRight size={18} />
+                  </Link>
+                ) : (
+                  <>
+                    <Link
+                      to="/signup"
+                      className="btn-primary h-12 px-7 text-base bg-white text-ink-900 hover:bg-white/90 shadow-none"
+                    >
+                      Get started free <ArrowRight size={18} />
+                    </Link>
+                    <Link
+                      to="/login"
+                      className="btn-ghost h-12 px-7 text-base border-white/20 text-white hover:bg-white/10"
+                    >
+                      Sign in
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </div>
