@@ -30,3 +30,12 @@ export function Notice({ message }: { message?: string | null }) {
   if (!message) return null;
   return <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-3 py-2">{message}</div>;
 }
+
+// Shown on every OTP page — tells people exactly where to look so they don't miss the code.
+export function SpamTip() {
+  return (
+    <div className="mt-4 rounded-xl bg-brand-50 border border-brand-100 text-brand-800 text-[13px] px-3.5 py-3 leading-relaxed">
+      📩 <b>Didn't get the email?</b> Check your <b>Spam</b> and <b>Promotions</b> folders as well as your inbox — it can take a minute to arrive. If you find it in Spam, tap <b>“Not spam”</b> so the next ones reach your inbox.
+    </div>
+  );
+}

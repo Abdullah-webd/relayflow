@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import AuthShell, { FieldError, Notice } from "./AuthShell";
+import AuthShell, { FieldError, Notice, SpamTip } from "./AuthShell";
 import { api } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 
@@ -63,6 +63,7 @@ export default function Verify() {
         <Notice message={notice} />
         <button className="btn-primary w-full" disabled={busy}>{busy ? "Verifying…" : "Verify & continue"}</button>
       </form>
+      <SpamTip />
       <div className="mt-6 flex items-center justify-between text-sm text-ink-500">
         <button onClick={resend} className="hover:text-ink-800">Resend code</button>
         <Link to="/login" className="hover:text-ink-800">Back to sign in</Link>

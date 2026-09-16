@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import AuthShell, { FieldError, Notice } from "./AuthShell";
+import AuthShell, { FieldError, SpamTip } from "./AuthShell";
 import { api } from "../../lib/api";
 
 export default function Reset() {
@@ -51,6 +51,7 @@ export default function Reset() {
         <FieldError message={err} />
         <button className="btn-primary w-full" disabled={busy}>{busy ? "Updating…" : "Update password"}</button>
       </form>
+      <SpamTip />
       <p className="mt-6 text-sm text-ink-500">
         <Link to="/login" className="hover:text-ink-800">Back to sign in</Link>
       </p>
