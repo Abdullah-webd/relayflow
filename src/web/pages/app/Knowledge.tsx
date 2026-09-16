@@ -127,16 +127,20 @@ export default function Knowledge() {
                 ) : (
                   <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                     {c.destinations.map((d) => (
-                      <div key={d.id} className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-2.5">
-                        <div className="min-w-0 text-[15px] text-ink-800 truncate">{d.name}</div>
-                        <button
-                          onClick={() => toggleDestination(c.connectionId, d)}
-                          className={`relative h-6 w-11 shrink-0 rounded-full transition ${d.autoReplyEnabled ? "bg-brand-600" : "bg-ink-200"}`}
-                          aria-label={`Toggle auto-reply for ${d.name}`}
-                        >
-                          <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${d.autoReplyEnabled ? "left-6" : "left-1"}`} />
-                        </button>
-                      </div>
+                      <button
+                        key={d.id}
+                        type="button"
+                        onClick={() => toggleDestination(c.connectionId, d)}
+                        aria-pressed={d.autoReplyEnabled}
+                        className={`w-full flex items-center justify-between gap-3 rounded-xl border px-4 py-2.5 text-left transition ${
+                          d.autoReplyEnabled ? "border-brand-500 bg-brand-50" : "border-line hover:bg-surface"
+                        }`}
+                      >
+                        <span className={`min-w-0 text-[15px] truncate ${d.autoReplyEnabled ? "font-semibold text-brand-800" : "text-ink-800"}`}>{d.name}</span>
+                        <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${d.autoReplyEnabled ? "bg-brand-600" : "bg-slate-300"}`}>
+                          <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${d.autoReplyEnabled ? "left-6" : "left-1"}`} />
+                        </span>
+                      </button>
                     ))}
                   </div>
                 )}
