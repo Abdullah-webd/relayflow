@@ -8,7 +8,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import QRCode from "qrcode";
 import pino from "pino";
-import { whatsappAuth, connections } from "../db";
+import { whatsappAuth, connections, destinations } from "../db";
 import { encryptString, decryptString } from "../lib/crypto";
 import {
   heartbeat,
@@ -218,6 +218,7 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
       if (!text) continue;
       if (!(await isDestinationSelected(connectionId, jid))) continue;
       const seconds = Number(message.messageTimestamp ?? Math.floor(Date.now() / 1000));
+      const senderName = message.pushName ?? "WhatsApp participant";
       await recordMessage({
         userId,
         connectionId,
@@ -225,11 +226,34 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
         destinationId: jid,
         destinationName: jid,
         externalId: `${jid}:${message.key.id}`,
-        senderName: message.pushName ?? "WhatsApp participant",
+        senderName,
         direction: "inbound",
         text,
         occurredAt: new Date(seconds * 1000),
       });
+
+      // Real-time auto-reply: if this group has auto-reply on, answer immediately
+      // (dynamic import avoids a circular dependency at module load).
+      try {
+        const dest = await destinations().findOne({ connectionId, externalId: jid });
+        if (dest?.autoReplyEnabled) {
+          const { handleInbound } = await import("../knowledge/autoReply");
+          await destinations()
+            .updateOne({ _id: dest._id }, { $set: { autoReplyLastSeenAt: new Date(seconds * 1000) } })
+            .catch(() => undefined); // move the poller's watermark so it won't double-answer
+          handleInbound({
+            userId,
+            platform: "whatsapp",
+            connectionId,
+            destinationExternalId: jid,
+            destinationName: dest.name,
+            senderName,
+            text,
+          }).catch((e) => console.error(`[whatsapp] auto-reply failed: ${(e as Error).message}`));
+        }
+      } catch (error) {
+        console.error(`[whatsapp] auto-reply hook error: ${(error as Error).message}`);
+      }
     }
     heartbeat(connectionId).catch(() => undefined);
   });
