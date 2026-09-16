@@ -3,7 +3,8 @@ import { api } from "../../lib/api";
 import { BookOpen, FileText, Upload, Trash2, Check, Loader2, Bot, ShieldCheck } from "lucide-react";
 
 interface Doc { id: string; title: string; source: "text" | "pdf"; chars: number; createdAt: string }
-interface Channel { connectionId: string; platform: string; displayName: string; autoReplyEnabled: boolean }
+interface AutoDest { id: string; externalId: string; name: string; kind: string; autoReplyEnabled: boolean }
+interface Channel { connectionId: string; platform: string; displayName: string; destinations: AutoDest[] }
 interface ReplyLog { id: string; platform: string; destination: string; from: string; incoming: string; replied: boolean; replyText: string | null; reason: string | null; at: string }
 interface KnowledgeData { guardrails: string; docs: Doc[]; channels: Channel[]; recent: ReplyLog[] }
 
@@ -67,13 +68,24 @@ export default function Knowledge() {
     await api(`/knowledge/docs/${id}`, { method: "DELETE" }).catch(() => load());
   }
 
-  async function toggleChannel(c: Channel) {
-    setData((d) => (d ? { ...d, channels: d.channels.map((x) => (x.connectionId === c.connectionId ? { ...x, autoReplyEnabled: !x.autoReplyEnabled } : x)) } : d));
-    await api("/knowledge/auto-reply", { method: "PATCH", body: JSON.stringify({ connectionId: c.connectionId, enabled: !c.autoReplyEnabled }) }).catch(() => load());
+  async function toggleDestination(connectionId: string, d: AutoDest) {
+    setData((data) =>
+      data
+        ? {
+            ...data,
+            channels: data.channels.map((c) =>
+              c.connectionId === connectionId
+                ? { ...c, destinations: c.destinations.map((x) => (x.id === d.id ? { ...x, autoReplyEnabled: !x.autoReplyEnabled } : x)) }
+                : c,
+            ),
+          }
+        : data,
+    );
+    await api("/knowledge/auto-reply", { method: "PATCH", body: JSON.stringify({ destinationId: d.id, enabled: !d.autoReplyEnabled }) }).catch(() => load());
   }
 
   if (!data) return <div className="h-full grid place-items-center text-ink-500">Loading…</div>;
-  const anyOn = data.channels.some((c) => c.autoReplyEnabled);
+  const anyOn = data.channels.some((c) => c.destinations.some((d) => d.autoReplyEnabled));
   const hasKnowledge = data.docs.length > 0;
 
   return (
@@ -97,23 +109,37 @@ export default function Knowledge() {
         <div className="mt-6 card p-6">
           <div className="flex items-center gap-2"><Bot size={18} className="text-brand-600" /><h2 className="font-bold text-ink-900">Auto-reply channels</h2></div>
           <p className="mt-1 text-sm text-ink-500">
-            When on, the AI reads new messages on that channel and replies automatically — <b>only when it's confident the answer is in your knowledge base</b>. If it's unsure, it stays silent and leaves it for you.
+            Pick the exact groups/channels the AI should answer in. When on, it reads new messages there and replies automatically — <b>only when it's confident the answer is in your knowledge base</b>. If it's unsure, it stays silent and leaves it for you.
           </p>
-          <div className="mt-4 space-y-2">
+          <div className="mt-4 space-y-5">
             {data.channels.length === 0 && <p className="text-sm text-ink-400">No connected channels yet — connect one in Connections first.</p>}
             {data.channels.map((c) => (
-              <div key={c.connectionId} className="flex items-center justify-between rounded-xl border border-line px-4 py-3">
-                <div>
-                  <div className="font-semibold text-ink-900">{PLATFORM_LABEL[c.platform] || c.platform}</div>
-                  <div className="text-sm text-ink-500 truncate">{c.displayName}</div>
+              <div key={c.connectionId}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="font-bold text-ink-900">{PLATFORM_LABEL[c.platform] || c.platform}</span>
+                  <span className="text-sm text-ink-400 truncate">{c.displayName}</span>
+                  <span className="ml-auto text-xs text-ink-400">
+                    {c.destinations.filter((d) => d.autoReplyEnabled).length}/{c.destinations.length} on
+                  </span>
                 </div>
-                <button
-                  onClick={() => toggleChannel(c)}
-                  className={`relative h-7 w-12 rounded-full transition ${c.autoReplyEnabled ? "bg-brand-600" : "bg-ink-200"}`}
-                  aria-label={`Toggle auto-reply for ${c.platform}`}
-                >
-                  <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${c.autoReplyEnabled ? "left-6" : "left-1"}`} />
-                </button>
+                {c.destinations.length === 0 ? (
+                  <p className="text-sm text-ink-400 pl-1">No groups/channels found yet — they appear shortly after connecting.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                    {c.destinations.map((d) => (
+                      <div key={d.id} className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-2.5">
+                        <div className="min-w-0 text-[15px] text-ink-800 truncate">{d.name}</div>
+                        <button
+                          onClick={() => toggleDestination(c.connectionId, d)}
+                          className={`relative h-6 w-11 shrink-0 rounded-full transition ${d.autoReplyEnabled ? "bg-brand-600" : "bg-ink-200"}`}
+                          aria-label={`Toggle auto-reply for ${d.name}`}
+                        >
+                          <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${d.autoReplyEnabled ? "left-6" : "left-1"}`} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

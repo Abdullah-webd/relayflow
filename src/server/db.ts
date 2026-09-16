@@ -114,6 +114,10 @@ export interface Destination {
   name: string;
   kind: string;
   selected: boolean;
+  // Auto-reply is chosen PER group/channel: the AI only answers in destinations the user
+  // explicitly turned on. Watermark tracks what we've already handled here.
+  autoReplyEnabled?: boolean;
+  autoReplyLastSeenAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

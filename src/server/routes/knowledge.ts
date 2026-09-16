@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { knowledgeBase, knowledgeDocs, autoReplies, connections } from "../db";
+import { knowledgeBase, knowledgeDocs, autoReplies, connections, destinations } from "../db";
 import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
 import { setGuardrails } from "../knowledge/knowledge";
@@ -13,10 +13,23 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     const docs = await knowledgeDocs().find({ userId }).sort({ createdAt: -1 }).toArray();
     const conns = await connections().find({ userId, status: "connected" }).toArray();
     const recent = await autoReplies().find({ userId }).sort({ createdAt: -1 }).limit(25).toArray();
+
+    // Each connected platform, with its individual groups/channels the user can toggle.
+    const channels = [];
+    for (const c of conns) {
+      const dests = await destinations().find({ connectionId: c._id }).sort({ name: 1 }).toArray();
+      channels.push({
+        connectionId: c._id,
+        platform: c.platform,
+        displayName: c.displayName,
+        destinations: dests.map((d) => ({ id: d._id, externalId: d.externalId, name: d.name, kind: d.kind, autoReplyEnabled: Boolean(d.autoReplyEnabled) })),
+      });
+    }
+
     return {
       guardrails: kb?.guardrails || "",
       docs: docs.map((d) => ({ id: d._id, title: d.title, source: d.source, chars: d.chars, createdAt: d.createdAt })),
-      channels: conns.map((c) => ({ connectionId: c._id, platform: c.platform, displayName: c.displayName, autoReplyEnabled: Boolean(c.autoReplyEnabled) })),
+      channels,
       recent: recent.map((r) => ({
         id: r._id, platform: r.platform, destination: r.destinationName, from: r.incomingFrom,
         incoming: r.incomingText, replied: r.replied, replyText: r.replyText, reason: r.reason, at: r.createdAt,
@@ -72,15 +85,19 @@ export async function knowledgeRoutes(app: FastifyInstance) {
     return { status: "ok" };
   });
 
-  // Turn auto-reply on/off for a specific connected channel.
+  // Turn auto-reply on/off for a SPECIFIC group/channel (destination).
   app.patch("/knowledge/auto-reply", { preHandler: requireActivePlan }, async (req, reply) => {
-    const parsed = z.object({ connectionId: z.string(), enabled: z.boolean() }).safeParse(req.body);
+    const parsed = z.object({ destinationId: z.string(), enabled: z.boolean() }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
-    await connections().updateOne(
-      { _id: parsed.data.connectionId, userId: req.userId! },
+    const set: Record<string, unknown> = {
+      autoReplyEnabled: parsed.data.enabled,
       // Reset the watermark to "now" when enabling, so we only answer messages from here on.
-      { $set: { autoReplyEnabled: parsed.data.enabled, autoReplyLastSeenAt: parsed.data.enabled ? new Date() : null, updatedAt: new Date() } },
-    );
+      autoReplyLastSeenAt: parsed.data.enabled ? new Date() : null,
+      updatedAt: new Date(),
+    };
+    // Enabling auto-reply on a group also marks it "in scope" so its messages are read.
+    if (parsed.data.enabled) set.selected = true;
+    await destinations().updateOne({ _id: parsed.data.destinationId, userId: req.userId! }, { $set: set });
     return { status: "ok" };
   });
 }
