@@ -50,8 +50,15 @@ export async function decideReply(guardrails: string, knowledge: string, senderN
     `BUSINESS GUARDRAILS:\n${guardrails || "(none)"}\n\n` +
     `INCOMING MESSAGE from ${senderName}:\n"${message}"`;
   try {
-    const res = await client.responses.create({ model: env.openaiModel, instructions, input });
-    const t = res.output_text ?? "";
+    const res: any = await client.chat.completions.create({
+      model: env.openaiModel,
+      messages: [
+        { role: "system", content: instructions },
+        { role: "user", content: input },
+      ],
+      response_format: { type: "json_object" },
+    });
+    const t = res.choices?.[0]?.message?.content ?? "";
     const json = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
     return {
       reply: Boolean(json.reply) && typeof json.answer === "string" && json.answer.trim().length > 0,

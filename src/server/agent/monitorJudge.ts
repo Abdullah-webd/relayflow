@@ -40,14 +40,17 @@ export async function judgeMonitor(condition: string, messages: JudgeMessage[]):
 
   const startedAt = Date.now();
   try {
-    const res = await client.responses.create({
+    const res: any = await client.chat.completions.create({
       model: env.openaiModel,
-      instructions: "You are a precise monitoring classifier. Output only a single JSON object, nothing else.",
-      input: prompt,
+      messages: [
+        { role: "system", content: "You are a precise monitoring classifier. Output only a single JSON object, nothing else." },
+        { role: "user", content: prompt },
+      ],
+      response_format: { type: "json_object" },
     });
     const ms = Date.now() - startedAt;
-    const usage = { inputTokens: (res as any).usage?.input_tokens ?? 0, outputTokens: (res as any).usage?.output_tokens ?? 0 };
-    const text = res.output_text ?? "";
+    const usage = { inputTokens: res.usage?.prompt_tokens ?? 0, outputTokens: res.usage?.completion_tokens ?? 0 };
+    const text = res.choices?.[0]?.message?.content ?? "";
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
     if (start < 0 || end < 0) return { matched: false, summary: "", usage, ms };

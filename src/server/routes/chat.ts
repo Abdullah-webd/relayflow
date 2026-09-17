@@ -111,6 +111,10 @@ export async function chatRoutes(app: FastifyInstance) {
 
     const message = body.data.message.trim();
     const now = new Date();
+    // Recent conversation history (loaded BEFORE adding the new message) — passed to the
+    // agent each turn so it keeps context without any provider-specific server-side state.
+    const prior = await chatMessages().find({ chatId: id }).sort({ createdAt: 1 }).limit(40).toArray();
+    const history = prior.map((m) => ({ role: m.role, content: m.content }));
     await chatMessages().insertOne({ _id: uid(), chatId: id, userId, role: "user", content: message, createdAt: now });
     if (chat.title === "New chat") {
       await chats().updateOne({ _id: id }, { $set: { title: message.slice(0, 60) } });
@@ -122,21 +126,19 @@ export async function chatRoutes(app: FastifyInstance) {
 
     const user = await users().findOne({ _id: userId });
     let finalText = "";
-    let responseId: string | null = chat.lastResponseId;
     let toolResults: unknown[] = [];
     try {
-      for await (const ev of streamRun(userId, message, chat.lastResponseId, user?.timezone || "UTC")) {
+      for await (const ev of streamRun(userId, message, history, user?.timezone || "UTC")) {
         if (ev.type === "activity") write({ type: "activity", phase: ev.phase, label: ev.label });
         else if (ev.type === "final") {
           finalText = ev.text;
-          responseId = ev.responseId;
           toolResults = ev.toolResults;
         }
       }
       for (let i = 0; i < finalText.length; i += 120) write({ type: "text_delta", delta: finalText.slice(i, i + 120) });
       const assistantMessageId = uid();
       await chatMessages().insertOne({ _id: assistantMessageId, chatId: id, userId, role: "assistant", content: finalText, toolResults, createdAt: new Date() });
-      await chats().updateOne({ _id: id }, { $set: { lastResponseId: responseId, updatedAt: new Date() } });
+      await chats().updateOne({ _id: id }, { $set: { updatedAt: new Date() } });
       // Send the DB id so the client can adopt it — approvals then persist against the
       // same id the message will have after a refresh.
       write({ type: "completed", toolResults, messageId: assistantMessageId });
@@ -187,14 +189,12 @@ export async function chatRoutes(app: FastifyInstance) {
       okCount === results.length
         ? `✅ Sent to ${okCount === 1 ? uniqueNames : `${okCount} destination${okCount === 1 ? "" : "s"} (${uniqueNames})`}.`
         : `⚠️ Sent to ${okCount}/${results.length}. ${detail}`;
-    let newResponseId = chat.lastResponseId;
     // The message is already sent by this point — the acknowledgement is a nicety and
     // must never fail the request (which would mislead the user into thinking it failed).
     try {
       const note = `[System] The user approved sending the message "${body.data.content}". It has now been executed. ${okCount} of ${results.length} destination(s) delivered. Details: ${detail}. Confirm to the user clearly whether it was sent and to which destination(s).`;
-      const ack = await acknowledgeAction(chat.lastResponseId, note);
+      const ack = await acknowledgeAction(note);
       if (ack.text?.trim()) ackText = ack.text;
-      newResponseId = ack.responseId;
     } catch (error) {
       console.error("[confirm-send] acknowledgement failed (send still went through):", (error as Error).message);
     }
@@ -207,7 +207,7 @@ export async function chatRoutes(app: FastifyInstance) {
       toolResults: [{ name: "send", result: { status: "done", results } }],
       createdAt: new Date(),
     });
-    await chats().updateOne({ _id: id }, { $set: { lastResponseId: newResponseId, updatedAt: new Date() } });
+    await chats().updateOne({ _id: id }, { $set: { updatedAt: new Date() } });
     return { results, ok: okCount, total: results.length };
   });
 }

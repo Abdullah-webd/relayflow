@@ -1,10 +1,16 @@
 import OpenAI from "openai";
 import { env } from "../env";
-import { toolByName, toolSchemas } from "./tools";
+import { toolByName, chatToolSchemas } from "./tools";
+
+export type ChatTurn = { role: "user" | "assistant"; content: string };
 
 const client = env.openaiApiKey
   ? new OpenAI({ apiKey: env.openaiApiKey, timeout: 180_000, maxRetries: 1, ...(env.openaiBaseUrl ? { baseURL: env.openaiBaseUrl } : {}) })
   : null;
+
+// DeepSeek is OpenAI-compatible on chat.completions. OpenAI reasoning models (e.g.
+// gpt-5.6-sol) additionally require reasoning_effort:'none' to use function tools there.
+const isDeepSeek = /deepseek/i.test(env.openaiBaseUrl);
 
 const SYSTEM = `You are RelayFlow — a single AI operations agent that has 360° access to the user's connected business messaging channels (WhatsApp, Telegram, Slack, Gmail).
 
@@ -60,7 +66,7 @@ function doneLabel(name: string, result: any): string | null {
 export async function* streamRun(
   userId: string,
   message: string,
-  previousResponseId: string | null,
+  history: ChatTurn[],
   timezone: string,
 ): AsyncGenerator<AgentEvent> {
   if (!client) {
@@ -69,80 +75,81 @@ export async function* streamRun(
   }
   const now = new Date();
   const localTime = new Intl.DateTimeFormat("en-US", { timeZone: timezone, dateStyle: "full", timeStyle: "short" }).format(now);
-  const instructions = `${SYSTEM}\n\nCurrent UTC time: ${now.toISOString()}\nUser timezone: ${timezone}\nCurrent local time for the user: ${localTime}\nWhen scheduling, convert the user's local times to an absolute UTC ISO timestamp for run_at.`;
+  const system = `${SYSTEM}\n\nCurrent UTC time: ${now.toISOString()}\nUser timezone: ${timezone}\nCurrent local time for the user: ${localTime}\nWhen scheduling, convert the user's local times to an absolute UTC ISO timestamp for run_at.`;
+
+  // Stateless conversation: we pass the recent history each turn (portable across providers).
+  const messages: any[] = [
+    { role: "system", content: system },
+    ...history.slice(-20).map((h) => ({ role: h.role, content: h.content })),
+    { role: "user", content: message },
+  ];
 
   yield { type: "activity", phase: "think", label: "Reviewing your request…" };
 
   let inputTokens = 0;
   let outputTokens = 0;
-  const track = (r: any) => {
-    inputTokens += r?.usage?.input_tokens ?? 0;
-    outputTokens += r?.usage?.output_tokens ?? 0;
-  };
-
-  let response: any = await client.responses.create({
-    model: env.openaiModel,
-    instructions,
-    input: message,
-    tools: toolSchemas as any,
-    ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
-  });
-  track(response);
-
   const toolResults: unknown[] = [];
+  let finalText = "";
+
   for (let round = 0; round < 8; round++) {
-    const followups: any[] = [];
-    for (const item of response.output ?? []) {
-      if (item.type !== "function_call") continue;
+    const params: any = { model: env.openaiModel, messages, tools: chatToolSchemas, tool_choice: "auto" };
+    if (!isDeepSeek) params.reasoning_effort = "none"; // OpenAI reasoning models need this to use tools here
+    const resp: any = await client.chat.completions.create(params);
+    inputTokens += resp?.usage?.prompt_tokens ?? 0;
+    outputTokens += resp?.usage?.completion_tokens ?? 0;
+    const msg = resp?.choices?.[0]?.message;
+    if (!msg) break;
+
+    const calls = msg.tool_calls ?? [];
+    if (calls.length === 0) {
+      finalText = msg.content ?? "";
+      break;
+    }
+
+    // Append the assistant's tool-call message, then run each tool and append its result.
+    messages.push({ role: "assistant", content: msg.content ?? "", tool_calls: calls });
+    for (const tc of calls) {
       let args: any = {};
       try {
-        args = JSON.parse(item.arguments);
+        args = JSON.parse(tc.function?.arguments || "{}");
       } catch {
         args = {};
       }
-      yield { type: "activity", phase: "start", label: startLabel(item.name, args) };
-      const tool = toolByName.get(item.name);
+      const name = tc.function?.name || "";
+      yield { type: "activity", phase: "start", label: startLabel(name, args) };
+      const tool = toolByName.get(name);
       let result: unknown;
       try {
         result = tool ? await tool.handler(userId, args) : { status: "error", error: "unknown tool" };
       } catch (error) {
         result = { status: "error", error: (error as Error).message };
       }
-      const done = doneLabel(item.name, result);
+      const done = doneLabel(name, result);
       if (done) yield { type: "activity", phase: "done", label: done };
-      toolResults.push({ name: item.name, arguments: args, result });
-      followups.push({ type: "function_call_output", call_id: item.call_id, output: JSON.stringify(result) });
+      toolResults.push({ name, arguments: args, result });
+      messages.push({ role: "tool", tool_call_id: tc.id, content: JSON.stringify(result) });
     }
-    if (followups.length === 0) break;
     yield { type: "activity", phase: "think", label: "Putting together a response…" };
-    response = await client.responses.create({
-      model: env.openaiModel,
-      instructions,
-      previous_response_id: response.id,
-      input: followups,
-      tools: toolSchemas as any,
-    });
-    track(response);
   }
 
-  yield { type: "final", text: response.output_text ?? "", responseId: response.id ?? null, toolResults, usage: { inputTokens, outputTokens } };
+  yield { type: "final", text: finalText, responseId: null, toolResults, usage: { inputTokens, outputTokens } };
 }
 
 /**
- * After the user approves an action (send/schedule) via the card, feed the outcome back
- * into the agent's conversation chain so it KNOWS what happened and confirms naturally —
- * and so a later "did you send it?" is answered correctly.
+ * After the user approves an action (send/schedule), have the agent confirm naturally.
+ * The note carries all the context, so a single stateless completion is enough.
  */
-export async function acknowledgeAction(
-  previousResponseId: string | null,
-  note: string,
-): Promise<{ text: string; responseId: string | null }> {
-  if (!client) return { text: note, responseId: previousResponseId };
-  const resp: any = await client.responses.create({
+export async function acknowledgeAction(note: string): Promise<{ text: string }> {
+  if (!client) return { text: note };
+  const resp: any = await client.chat.completions.create({
     model: env.openaiModel,
-    instructions: `${SYSTEM}\n\nYou have just performed an action the user approved. Confirm what happened in one or two short sentences, naturally. Do not call any tools.`,
-    input: note,
-    ...(previousResponseId ? { previous_response_id: previousResponseId } : {}),
+    messages: [
+      {
+        role: "system",
+        content: `${SYSTEM}\n\nYou have just performed an action the user approved. Confirm what happened in one or two short sentences, naturally. Do not call any tools.`,
+      },
+      { role: "user", content: note },
+    ],
   });
-  return { text: resp.output_text ?? note, responseId: resp.id ?? previousResponseId };
+  return { text: resp?.choices?.[0]?.message?.content ?? note };
 }

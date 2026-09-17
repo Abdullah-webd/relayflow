@@ -62,7 +62,7 @@ async function cleanup() {
 async function runAgentCase(input: string) {
   const startedAt = Date.now();
   let text = "", tools: any[] = [], usage = { inputTokens: 0, outputTokens: 0 };
-  for await (const ev of streamRun(USER, input, null, "Africa/Lagos")) {
+  for await (const ev of streamRun(USER, input, [], "Africa/Lagos")) {
     if (ev.type === "final") { text = ev.text; tools = (ev.toolResults as any[]) || []; usage = ev.usage || usage; }
   }
   return { text, tools, usage, ms: Date.now() - startedAt };

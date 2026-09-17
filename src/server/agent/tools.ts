@@ -179,3 +179,9 @@ export const toolSchemas = tools.map((t) => ({
   strict: true,
   parameters: t.parameters,
 }));
+
+// chat.completions tool format (works on OpenAI AND DeepSeek and any OpenAI-compatible API).
+export const chatToolSchemas = tools.map((t) => ({
+  type: "function" as const,
+  function: { name: t.name, description: t.description, parameters: t.parameters },
+}));

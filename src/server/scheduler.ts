@@ -14,7 +14,7 @@ async function runTask(task: ScheduledTask): Promise<void> {
   let finalText = "";
   const toolResults: any[] = [];
   try {
-    for await (const ev of streamRun(task.userId, task.instruction, null, tz)) {
+    for await (const ev of streamRun(task.userId, task.instruction, [], tz)) {
       if (ev.type === "final") {
         finalText = ev.text;
         toolResults.push(...(ev.toolResults as any[]));
