@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "./api";
 
-export type SubStatus = "none" | "trialing" | "active" | "past_due" | "canceled" | "incomplete";
+export type SubStatus = "none" | "trialing" | "trial_expired" | "active" | "past_due" | "canceled" | "incomplete";
 
 export interface User {
   id: string;
@@ -14,11 +14,13 @@ export interface User {
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
   paywallDisabled?: boolean;
+  hasAccess?: boolean; // computed by the server: active subscription, or an unexpired free trial
 }
 
 export function hasActivePlan(u: User | null): boolean {
   if (!u) return false;
   if (u.paywallDisabled) return true; // launch mode: everyone gets in
+  if (typeof u.hasAccess === "boolean") return u.hasAccess;
   return u.subscriptionStatus === "trialing" || u.subscriptionStatus === "active";
 }
 

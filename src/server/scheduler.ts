@@ -5,8 +5,22 @@ import { sendToTargets, type SendTarget } from "./connectors/manager";
 import { sendEmail } from "./lib/email";
 import { runDueMonitors } from "./monitors";
 import { runAutoReplyTick } from "./knowledge/autoReplyPoller";
+import { userHasAccessById } from "./billing/access";
 
 async function runTask(task: ScheduledTask): Promise<void> {
+  // Paywall guardrail: no trial/subscription means the agent does no work for this account.
+  if (!(await userHasAccessById(task.userId))) {
+    const paused: Record<string, unknown> = { lastResult: "Paused: subscription required", updatedAt: new Date() };
+    if (task.schedule === "once") {
+      paused.runAt = new Date(Date.now() + 60 * 60 * 1000); // keep it pending; retry hourly
+    } else {
+      const next = new Date((task.runAt ?? new Date()).getTime()); // skip this run, keep the usual time
+      next.setUTCDate(next.getUTCDate() + (task.schedule === "weekly" ? 7 : 1));
+      paused.runAt = next;
+    }
+    await scheduledTasks().updateOne({ _id: task._id }, { $set: paused });
+    return;
+  }
   const user = await users().findOne({ _id: task.userId });
   const tz = task.timezone || "UTC";
 

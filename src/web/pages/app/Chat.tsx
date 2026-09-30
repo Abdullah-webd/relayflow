@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { api } from "../../lib/api";
-import { Plus, Send, Trash2, Sparkles, Check, MessageSquare, X, MoreVertical, Pencil, AlertTriangle } from "lucide-react";
+import { Logo } from "../../components/Logo";
+import { Plus, Send, Trash2, Check, MessageSquare, X, MoreVertical, Pencil, AlertTriangle } from "lucide-react";
 
 interface Step {
   label: string;
@@ -360,7 +361,7 @@ export default function Chat() {
                 <AlertTriangle size={20} />
               </span>
               <div>
-                <h3 className="font-bold text-ink-900">Delete this chat?</h3>
+                <h3 className="font-semibold text-ink-900">Delete this chat?</h3>
                 <p className="text-sm text-ink-500">This permanently removes the conversation.</p>
               </div>
             </div>
@@ -379,10 +380,8 @@ export default function Chat() {
           <div className="mx-auto max-w-3xl px-5 py-8">
             {messages.length === 0 && (
               <div className="mt-20 text-center">
-                <span className="inline-grid place-items-center h-14 w-14 rounded-2xl text-white" style={{ background: "linear-gradient(135deg,#22c1d6,#4f46e5)" }}>
-                  <Sparkles size={26} />
-                </span>
-                <h2 className="mt-5 text-2xl font-bold text-ink-900">What should we do across your channels?</h2>
+                <span className="inline-block"><Logo size={48} showText={false} /></span>
+                <h2 className="mt-5 text-2xl font-semibold text-ink-900">What should we do across your channels?</h2>
                 <p className="mt-2 text-ink-500">Ask about recent messages, or say “send this to all my channels”.</p>
                 <div className="mt-6 flex flex-wrap gap-2 justify-center">
                   {["Summarize what's been said on WhatsApp today", "Which channels am I connected to?", "Send 'We're open!' to all my channels"].map((p) => (
@@ -454,7 +453,7 @@ function MessageView({
   if (msg.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-br-md bg-brand-50 text-brand-800 px-4 py-2.5 text-[15px] whitespace-pre-wrap">{msg.content}</div>
+        <div className="max-w-[80%] rounded-2xl rounded-br-md bg-brand-600 text-white px-4 py-2.5 text-[15px] whitespace-pre-wrap">{msg.content}</div>
       </div>
     );
   }
@@ -512,9 +511,7 @@ function MessageView({
 
   return (
     <div className="flex items-start gap-3">
-      <span className="grid place-items-center h-8 w-8 rounded-lg text-white shrink-0" style={{ background: "linear-gradient(135deg,#22c1d6,#4f46e5)" }}>
-        <Sparkles size={16} />
-      </span>
+      <span className="shrink-0"><Logo size={28} showText={false} /></span>
       <div className="min-w-0 flex-1">
         {msg.pending && (!msg.content || msg.content.length === 0) ? (
           <ActivityFeed steps={msg.steps || []} />

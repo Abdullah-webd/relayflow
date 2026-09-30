@@ -10,6 +10,7 @@ interface BillingState {
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
+  hasStripeSubscription?: boolean;
 }
 
 const TIMEZONES: string[] = (() => {
@@ -30,23 +31,25 @@ function StatusBadge({ status }: { status: string }) {
     trialing: "bg-brand-50 text-brand-700",
     active: "bg-emerald-50 text-emerald-700",
     past_due: "bg-amber-50 text-amber-700",
-    canceled: "bg-ink-100 text-ink-600",
-    none: "bg-ink-100 text-ink-600",
+    trial_expired: "bg-amber-50 text-amber-700",
+    canceled: "bg-surface text-ink-600",
+    none: "bg-surface text-ink-600",
   };
   const label: Record<string, string> = {
     trialing: "Free trial",
+    trial_expired: "Trial ended",
     active: "Active",
     past_due: "Payment due",
     canceled: "Canceled",
     none: "No plan",
   };
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${map[status] || map.none}`}>{label[status] || status}</span>;
+  return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${map[status] || map.none}`}>{label[status] || status}</span>;
 }
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
     <div className="mt-5 card p-6">
-      <h2 className="font-bold text-ink-900 text-lg">{title}</h2>
+      <h2 className="font-semibold text-ink-900 text-lg">{title}</h2>
       {desc && <p className="mt-1 text-sm text-ink-500">{desc}</p>}
       <div className="mt-4">{children}</div>
     </div>
@@ -118,7 +121,7 @@ export default function Settings() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8">
-        <h1 className="text-2xl font-bold text-ink-900">Settings</h1>
+        <h1 className="text-2xl font-semibold text-ink-900">Settings</h1>
 
         {/* Profile */}
         <Section title="Profile" desc="How you appear in RelayFlow and the timezone used for scheduled tasks.">
@@ -164,27 +167,34 @@ export default function Settings() {
               </span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-ink-900">{billing?.plan ? PLAN_NAMES[billing.plan] : "No plan"}</span>
+                  <span className="font-semibold text-ink-900">{billing?.plan ? PLAN_NAMES[billing.plan] : "No plan"}</span>
                   <StatusBadge status={billing?.status || "none"} />
                 </div>
                 <div className="text-sm text-ink-500">
-                  {billing?.status === "trialing"
-                    ? `Free trial ends ${fmt(billing.trialEndsAt)}`
+                  {billing?.status === "trialing" && billing.trialEndsAt
+                    ? `Free trial ends ${new Date(billing.trialEndsAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}. No card on file.`
+                    : billing?.status === "trial_expired"
+                    ? "Your free trial has ended. Subscribe to keep using RelayFlow."
                     : billing?.cancelAtPeriodEnd
                     ? `Cancels on ${fmt(billing?.currentPeriodEnd ?? null)}`
                     : billing?.currentPeriodEnd
-                    ? `Renews ${fmt(billing.currentPeriodEnd)}`
-                    : "Choose a plan to get started"}
+                    ? `Renews ${fmt(billing.currentPeriodEnd)} · $15/month`
+                    : billing?.status === "active"
+                    ? "Active"
+                    : "Subscribe to use RelayFlow"}
                 </div>
               </div>
             </div>
             <div className="flex gap-2">
-              <button onClick={() => nav("/pricing")} className="btn-ghost">
-                Change plan
-              </button>
-              <button onClick={manageBilling} disabled={portalBusy} className="btn-primary">
-                {portalBusy ? <Loader2 className="animate-spin" size={18} /> : <>Manage billing <ExternalLink size={16} /></>}
-              </button>
+              {billing?.hasStripeSubscription ? (
+                <button onClick={manageBilling} disabled={portalBusy} className="btn-primary">
+                  {portalBusy ? <Loader2 className="animate-spin" size={18} /> : <>Manage billing <ExternalLink size={16} /></>}
+                </button>
+              ) : billing && billing.status !== "active" ? (
+                <button onClick={() => nav("/pricing")} className="btn-primary">
+                  Subscribe · $15/month
+                </button>
+              ) : null}
             </div>
           </div>
         </Section>

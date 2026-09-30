@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "../env";
 import { authenticateToken } from "./session";
 import { users } from "../db";
-import { isActiveStatus } from "../billing/plans";
+import { hasAccess } from "../billing/plans";
 
 export const SESSION_COOKIE = "rf_session";
 
@@ -42,8 +42,12 @@ export async function requireActivePlan(req: FastifyRequest, reply: FastifyReply
   if (!user.emailVerified) return void (await reply.code(403).send({ error: "email_unverified" }));
   // Launch mode: verified users get in without a subscription.
   if (env.paywallDisabled) return;
-  if (!isActiveStatus(user.subscriptionStatus)) {
-    return void (await reply.code(402).send({ error: "subscription_required", detail: "An active plan or trial is required." }));
+  if (!hasAccess(user)) {
+    const trialEnded = user.subscriptionStatus === "trialing";
+    return void (await reply.code(402).send({
+      error: "subscription_required",
+      detail: trialEnded ? "Your free trial has ended. Subscribe to keep using RelayFlow." : "An active subscription is required.",
+    }));
   }
 }
 

@@ -11,7 +11,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:8000",
+      // API_PROXY lets you run only the UI against another backend, e.g.
+      // API_PROXY=https://userelayflow.com npx vite
+      "/api": { target: process.env.API_PROXY || "http://localhost:8000", changeOrigin: true, secure: true },
     },
   },
   build: {

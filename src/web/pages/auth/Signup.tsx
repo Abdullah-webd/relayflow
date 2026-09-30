@@ -26,7 +26,7 @@ export default function Signup() {
   }
 
   return (
-    <AuthShell title="Create your workspace" subtitle="Connect your channels and put one AI agent across all of them.">
+    <AuthShell title="Create your workspace" subtitle="Start your 1-day free trial. No credit card required.">
       <form onSubmit={submit} className="space-y-4">
         <div>
           <label className="label">Your name</label>

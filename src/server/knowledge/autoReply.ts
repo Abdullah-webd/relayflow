@@ -3,6 +3,7 @@ import { env } from "../env";
 import { autoReplies, users, type Platform } from "../db";
 import { uid } from "../lib/crypto";
 import { getKnowledgeContext } from "./knowledge";
+import { userHasAccessById } from "../billing/access";
 import { sendToTargets, type SendTarget } from "../connectors/manager";
 import { sendGmail } from "../connectors/gmail";
 
@@ -93,6 +94,9 @@ export async function handleInbound(msg: InboundMessage): Promise<{ replied: boo
   try {
     // Ignore our own messages / empty text.
     if (!msg.text?.trim() || /^You \(via RelayFlow\)/.test(msg.senderName)) return { replied: false, reason: "ignored" };
+
+    // Paywall guardrail: no auto-replies without an active trial or subscription.
+    if (!(await userHasAccessById(msg.userId))) return { replied: false, reason: "subscription required" };
 
     // Rate-limit: at most one auto-reply per sender+destination per 90s.
     const recent = await autoReplies().findOne({

@@ -2,6 +2,7 @@ import { monitors, users, connections, type Monitor, type Platform } from "./db"
 import { getRecentMessages } from "./connectors/manager";
 import { judgeMonitor } from "./agent/monitorJudge";
 import { sendEmail } from "./lib/email";
+import { userHasAccessById } from "./billing/access";
 
 export const MIN_INTERVAL_MINUTES = 15;
 export const DEFAULT_INTERVAL_MINUTES = 30;
@@ -20,6 +21,12 @@ async function notify(m: Monitor, subject: string, body: string): Promise<void> 
 
 async function runMonitor(m: Monitor): Promise<void> {
   const now = new Date();
+
+  // Paywall guardrail: monitors pause (and resume automatically) with the subscription.
+  if (!(await userHasAccessById(m.userId))) {
+    await monitors().updateOne({ _id: m._id }, { $set: { lastCheckedAt: now, updatedAt: now, lastResult: "Paused: subscription required" } });
+    return;
+  }
 
   // If the channel isn't actually connected (e.g. Gmail token expired), say so plainly
   // in the monitor's status instead of silently finding "nothing".

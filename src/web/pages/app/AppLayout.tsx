@@ -1,7 +1,50 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
 import { Logo } from "../../components/Logo";
 import { useAuth } from "../../lib/auth";
+
+function timeLeft(ms: number): string {
+  const mins = Math.max(0, Math.floor(ms / 60_000));
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h >= 1) return `${h}h ${m}m left`;
+  return `${m}m left`;
+}
+
+/**
+ * Free-trial bar. Counts down, and the moment the trial ends it refreshes the session so
+ * the route guard sends the user to the paywall (the server also rejects every API call).
+ */
+function TrialBar() {
+  const { user, refresh } = useAuth();
+  const [now, setNow] = useState(() => Date.now());
+  const endsAt = user?.trialEndsAt ? new Date(user.trialEndsAt).getTime() : null;
+  const onTrial = user?.subscriptionStatus === "trialing" && !user?.paywallDisabled && endsAt !== null;
+
+  useEffect(() => {
+    if (!onTrial) return;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [onTrial]);
+
+  useEffect(() => {
+    if (!onTrial || endsAt === null) return;
+    const t = setTimeout(() => void refresh(), Math.max(0, endsAt - Date.now()) + 1000);
+    return () => clearTimeout(t);
+  }, [onTrial, endsAt, refresh]);
+
+  if (!onTrial || endsAt === null) return null;
+  return (
+    <div className="flex items-center justify-center gap-3 h-10 px-4 border-b border-brand-100 bg-brand-50 text-[13px] text-brand-800">
+      <span>
+        <span className="font-medium">Free trial</span> · <span className="tabular-nums">{timeLeft(endsAt - now)}</span>
+      </span>
+      <Link to="/pricing" className="font-medium underline underline-offset-2 decoration-brand-300 hover:decoration-brand-700">
+        Subscribe
+      </Link>
+    </div>
+  );
+}
 import {
   MessageSquare,
   Plug,
@@ -76,7 +119,7 @@ export default function AppLayout() {
         </button>
       </div>
 
-      <nav className="px-3 space-y-1 flex-1">
+      <nav className="px-3 space-y-0.5 flex-1">
         {items.map((n) => (
           <NavLink
             key={n.to}
@@ -84,12 +127,12 @@ export default function AppLayout() {
             title={n.label}
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
-              `flex items-center gap-3 h-11 rounded-xl text-[15px] font-medium transition ${compact ? "md:justify-center md:px-0 px-3" : "px-3"} ${
-                isActive ? "bg-brand-50 text-brand-700" : "text-ink-600 hover:bg-surface"
+              `flex items-center gap-2.5 h-9 rounded-lg text-[14px] font-medium transition-colors duration-150 ${compact ? "md:justify-center md:px-0 px-3" : "px-3"} ${
+                isActive ? "bg-brand-50 text-brand-700" : "text-ink-600 hover:bg-surface hover:text-ink-900"
               }`
             }
           >
-            <n.icon size={20} className="shrink-0" />
+            <n.icon size={18} strokeWidth={1.75} className="shrink-0 opacity-80" />
             <span className={compact ? "md:hidden" : ""}>{n.label}</span>
           </NavLink>
         ))}
@@ -100,12 +143,12 @@ export default function AppLayout() {
         <Link
           to="/app/settings"
           onClick={() => setMobileOpen(false)}
-          className="mx-3 mb-1 flex items-center justify-between rounded-xl border border-line px-3 py-2.5 hover:bg-surface"
+          className="mx-3 mb-2 flex items-center justify-between rounded-lg border border-line px-3 h-10 transition-colors hover:bg-surface"
         >
-          <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink-700">
-            <Zap size={16} className="text-brand-600" /> Plan
+          <span className="inline-flex items-center gap-2 text-[13px] font-medium text-ink-600">
+            <Zap size={15} strokeWidth={1.75} className="text-brand-600" /> Plan
           </span>
-          <span className="text-sm font-bold text-ink-900">
+          <span className="text-[13px] font-medium text-ink-900">
             {user?.paywallDisabled
               ? "Free"
               : user?.subscriptionStatus === "trialing"
@@ -119,7 +162,7 @@ export default function AppLayout() {
 
       <div className="p-3 border-t border-line">
         <div className={`flex items-center gap-3 px-2 py-2 ${compact ? "md:justify-center" : ""}`}>
-          <span className="grid place-items-center h-9 w-9 rounded-full bg-brand-100 text-brand-700 font-bold shrink-0">
+          <span className="grid place-items-center h-8 w-8 rounded-full border border-line bg-surface text-[13px] text-ink-700 font-semibold shrink-0">
             {(user?.name || user?.email || "?")[0]?.toUpperCase()}
           </span>
           <div className={`min-w-0 flex-1 ${compact ? "md:hidden" : ""}`}>
@@ -143,7 +186,7 @@ export default function AppLayout() {
   );
 
   return (
-    <div className="h-full flex bg-surface">
+    <div className="h-full flex bg-white">
       {/* Desktop sidebar */}
       <div className="hidden md:flex h-full">{sidebar}</div>
 
@@ -163,6 +206,7 @@ export default function AppLayout() {
           </button>
           <Logo size={26} />
         </div>
+        <TrialBar />
         <main className="flex-1 min-w-0 overflow-hidden">
           <Outlet />
         </main>

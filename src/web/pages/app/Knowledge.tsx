@@ -94,7 +94,7 @@ export default function Knowledge() {
         <div className="flex items-center gap-3">
           <span className="grid place-items-center h-11 w-11 rounded-xl bg-brand-50 text-brand-600"><BookOpen size={22} /></span>
           <div>
-            <h1 className="text-2xl font-bold text-ink-900">Knowledge & Auto-reply</h1>
+            <h1 className="text-2xl font-semibold text-ink-900">Knowledge & Auto-reply</h1>
             <p className="text-ink-500">Give the AI your facts, then let it answer customers on the channels you choose.</p>
           </div>
         </div>
@@ -107,7 +107,7 @@ export default function Knowledge() {
 
         {/* Auto-reply channels */}
         <div className="mt-6 card p-6">
-          <div className="flex items-center gap-2"><Bot size={18} className="text-brand-600" /><h2 className="font-bold text-ink-900">Auto-reply channels</h2></div>
+          <div className="flex items-center gap-2"><Bot size={18} className="text-brand-600" /><h2 className="font-semibold text-ink-900">Auto-reply channels</h2></div>
           <p className="mt-1 text-sm text-ink-500">
             Pick the exact groups/channels the AI should answer in. When on, it reads new messages there and replies automatically — <b>only when it's confident the answer is in your knowledge base</b>. If it's unsure, it stays silent and leaves it for you.
           </p>
@@ -116,7 +116,7 @@ export default function Knowledge() {
             {data.channels.map((c) => (
               <div key={c.connectionId}>
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="font-bold text-ink-900">{PLATFORM_LABEL[c.platform] || c.platform}</span>
+                  <span className="font-semibold text-ink-900">{PLATFORM_LABEL[c.platform] || c.platform}</span>
                   <span className="text-sm text-ink-400 truncate">{c.displayName}</span>
                   <span className="ml-auto text-xs text-ink-400">
                     {c.destinations.filter((d) => d.autoReplyEnabled).length}/{c.destinations.length} on
@@ -137,7 +137,7 @@ export default function Knowledge() {
                         }`}
                       >
                         <span className={`min-w-0 text-[15px] truncate ${d.autoReplyEnabled ? "font-semibold text-brand-800" : "text-ink-800"}`}>{d.name}</span>
-                        <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${d.autoReplyEnabled ? "bg-brand-600" : "bg-slate-300"}`}>
+                        <span className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${d.autoReplyEnabled ? "bg-brand-600" : "bg-ink-300"}`}>
                           <span className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow-sm transition-all ${d.autoReplyEnabled ? "left-6" : "left-1"}`} />
                         </span>
                       </button>
@@ -151,7 +151,7 @@ export default function Knowledge() {
 
         {/* Guardrails */}
         <div className="mt-5 card p-6">
-          <div className="flex items-center gap-2"><ShieldCheck size={18} className="text-brand-600" /><h2 className="font-bold text-ink-900">Guardrails</h2></div>
+          <div className="flex items-center gap-2"><ShieldCheck size={18} className="text-brand-600" /><h2 className="font-semibold text-ink-900">Guardrails</h2></div>
           <p className="mt-1 text-sm text-ink-500">Tell the AI what it may and may not do. Plain English.</p>
           <textarea
             className="input h-28 py-2 mt-3"
@@ -169,7 +169,7 @@ export default function Knowledge() {
 
         {/* Knowledge documents */}
         <div className="mt-5 card p-6">
-          <div className="flex items-center gap-2"><FileText size={18} className="text-brand-600" /><h2 className="font-bold text-ink-900">Knowledge documents</h2></div>
+          <div className="flex items-center gap-2"><FileText size={18} className="text-brand-600" /><h2 className="font-semibold text-ink-900">Knowledge documents</h2></div>
           <p className="mt-1 text-sm text-ink-500">Your facts: products, prices, hours, address, policies. Paste text or upload a PDF.</p>
 
           <div className="mt-4 grid gap-3">
@@ -206,7 +206,7 @@ export default function Knowledge() {
 
         {/* Recent auto-replies */}
         <div className="mt-5 card p-6">
-          <h2 className="font-bold text-ink-900">Recent auto-replies</h2>
+          <h2 className="font-semibold text-ink-900">Recent auto-replies</h2>
           <p className="mt-1 text-sm text-ink-500">What the AI answered — and what it chose to leave for you.</p>
           <div className="mt-4 space-y-2">
             {data.recent.length === 0 && <p className="text-sm text-ink-400">Nothing yet. Turn on a channel and add facts to get started.</p>}
@@ -214,7 +214,7 @@ export default function Knowledge() {
               <div key={r.id} className="rounded-xl border border-line px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm text-ink-500 truncate">{PLATFORM_LABEL[r.platform] || r.platform} · {r.destination} · from {r.from}</div>
-                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${r.replied ? "bg-emerald-50 text-emerald-700" : "bg-ink-100 text-ink-500"}`}>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${r.replied ? "bg-emerald-50 text-emerald-700" : "bg-ink-100 text-ink-500"}`}>
                     {r.replied ? "Replied" : "Skipped"}
                   </span>
                 </div>

@@ -77,7 +77,7 @@ export default function Tasks() {
       <div className="mx-auto max-w-3xl px-6 py-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-ink-900">Scheduled tasks</h1>
+            <h1 className="text-2xl font-semibold text-ink-900">Scheduled tasks</h1>
             <p className="mt-1 text-ink-500">Have the agent run something on a schedule and email you the result.</p>
           </div>
           <button onClick={() => setShowForm((s) => !s)} className="btn-primary h-10 px-4">
@@ -145,7 +145,7 @@ export default function Tasks() {
 
         {/* Monitors */}
         <div className="mt-10">
-          <h2 className="text-xl font-bold text-ink-900">Monitors</h2>
+          <h2 className="text-xl font-semibold text-ink-900">Monitors</h2>
           <p className="mt-1 text-ink-500">
             Ask the agent to “let me know when someone asks about X on WhatsApp” — it checks on an interval and emails you only when it matches.
           </p>

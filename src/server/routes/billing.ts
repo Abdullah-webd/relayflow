@@ -3,7 +3,8 @@ import { z } from "zod";
 import { env } from "../env";
 import { users } from "../db";
 import { requireAuth } from "../auth/context";
-import { PLAN_LIST, TRIAL_DAYS, DEFAULT_PLAN } from "../billing/plans";
+import { PLAN_LIST, TRIAL_DAYS, DEFAULT_PLAN, effectiveStatus } from "../billing/plans";
+import { userCanUse } from "../billing/access";
 import {
   confirmCheckout,
   createCheckoutSession,
@@ -57,7 +58,10 @@ export async function billingRoutes(app: FastifyInstance) {
     const user = await users().findOne({ _id: req.userId! });
     return {
       plan: user?.plan ?? null,
-      status: user?.subscriptionStatus ?? "none",
+      status: user ? effectiveStatus(user) : "none",
+      hasAccess: userCanUse(user),
+      // Only accounts with a real Stripe subscription can use the billing portal.
+      hasStripeSubscription: Boolean(user?.stripeSubscriptionId) && !user?.compAccess && user?.trialSource !== "app",
       trialEndsAt: user?.trialEndsAt ?? null,
       currentPeriodEnd: user?.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: Boolean(user?.cancelAtPeriodEnd),
@@ -73,6 +77,8 @@ export async function billingRoutes(app: FastifyInstance) {
     const user = await users().findOne({ _id: req.userId! });
     if (!user) return reply.code(401).send({ error: "unauthorized" });
     if (!user.emailVerified) return reply.code(403).send({ error: "email_unverified" });
+    // Never create a second subscription for an account that already has one.
+    if (user.subscriptionStatus === "active") return reply.code(409).send({ error: "already_subscribed", detail: "Your subscription is already active." });
     try {
       const url = await createCheckoutSession(user, parsed.data.plan ?? DEFAULT_PLAN, appOrigin(req));
       return reply.send({ url });

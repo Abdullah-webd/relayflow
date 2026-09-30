@@ -41,7 +41,7 @@ export default function Verify() {
   }
 
   return (
-    <AuthShell title="Verify your email" subtitle="Enter the 6-digit code we emailed you. It expires in 10 minutes.">
+    <AuthShell title="Verify your email" subtitle="Enter the 6-digit code we emailed you. Your free trial starts as soon as you verify.">
       <form onSubmit={submit} className="space-y-4">
         <div>
           <label className="label">Email</label>

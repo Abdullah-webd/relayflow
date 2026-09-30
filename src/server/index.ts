@@ -76,9 +76,15 @@ async function main() {
   await app.listen({ host: "0.0.0.0", port: env.port });
   console.log(`RelayFlow server listening on http://localhost:${env.port}`);
 
-  // Background services (best-effort; never crash the server).
-  resumeConnections().catch((error) => console.error("[connectors] resume failed", error));
-  startScheduler();
+  // Background services (best-effort; never crash the server). DISABLE_BACKGROUND=true runs
+  // the API only — for local testing against the production database without starting a
+  // second copy of the channel connections or the scheduler.
+  if (process.env.DISABLE_BACKGROUND === "true") {
+    console.log("[server] background services disabled (DISABLE_BACKGROUND=true)");
+  } else {
+    resumeConnections().catch((error) => console.error("[connectors] resume failed", error));
+    startScheduler();
+  }
 }
 
 main().catch((error) => {

@@ -32,8 +32,11 @@ export interface User {
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
   trialEndsAt?: Date | null;
+  trialSource?: "app" | null; // "app" = no-card in-app trial (ends at trialEndsAt)
+  trialStartedAt?: Date | null; // set once; an account only ever gets one trial
   currentPeriodEnd?: Date | null;
   cancelAtPeriodEnd?: boolean;
+  compAccess?: boolean; // complimentary access granted by the owner
   createdAt: Date;
   updatedAt: Date;
 }

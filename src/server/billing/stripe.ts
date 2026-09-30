@@ -1,7 +1,7 @@
 import Stripe from "stripe";
 import { env } from "../env";
 import { users, type SubscriptionStatus, type User } from "../db";
-import { PLANS, TRIAL_DAYS, DEFAULT_PLAN, planByLookupKey, type PlanKey } from "./plans";
+import { PLANS, DEFAULT_PLAN, planByLookupKey, type PlanKey } from "./plans";
 
 let client: Stripe | null = null;
 export function getStripe(): Stripe {
@@ -70,12 +70,14 @@ export async function createCheckoutSession(user: User, planKey: PlanKey, origin
   const customer = await ensureCustomer(user);
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
+    // Explicit card payments: don't depend on the dashboard's dynamic payment-method
+    // settings (which, with none enabled for USD, makes Checkout fail outright).
+    payment_method_types: ["card"],
     customer,
     client_reference_id: user._id,
     line_items: [{ price: prices[planKey], quantity: 1 }],
-    subscription_data: { trial_period_days: TRIAL_DAYS, metadata: { userId: user._id, plan: planKey } },
-    // Require a card on file even though the first day is free.
-    payment_method_collection: "always",
+    // No Stripe trial: the free trial already happened in-app (no card). Paying starts now.
+    subscription_data: { metadata: { userId: user._id, plan: planKey } },
     allow_promotion_codes: true,
     billing_address_collection: "auto",
     success_url: `${origin}/pricing?status=success&session_id={CHECKOUT_SESSION_ID}`,
@@ -130,6 +132,7 @@ export async function syncUserFromSubscription(userId: string, sub: Stripe.Subsc
     plan: plan?.key ?? DEFAULT_PLAN,
     currentPeriodEnd: periodEnd,
     trialEndsAt: trialEnd,
+    trialSource: null, // a real Stripe subscription supersedes the in-app trial
     cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
     updatedAt: new Date(),
   };

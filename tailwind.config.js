@@ -1,47 +1,75 @@
 /** @type {import('tailwindcss').Config} */
+// Design tokens live as CSS variables in src/web/index.css (RGB channels so Tailwind
+// opacity modifiers like bg-brand-500/10 keep working). This file only maps names.
+const v = (name) => `rgb(var(--${name}) / <alpha-value>)`;
+
 export default {
   content: ["./src/web/index.html", "./src/web/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
+        // Brand = the logo color: primary buttons, links, focus, active states.
         brand: {
-          50: "#eef1ff",
-          100: "#e0e5ff",
-          200: "#c6ccff",
-          300: "#a3a8fc",
-          400: "#8380f6",
-          500: "#635bf7",
-          600: "#4f46e5",
-          700: "#4338ca",
-          800: "#3730a3",
-          900: "#2e2a76",
+          50: v("brand-50"),
+          100: v("brand-100"),
+          200: v("brand-200"),
+          300: v("brand-300"),
+          400: v("brand-400"),
+          500: v("brand-500"),
+          600: v("brand-600"),
+          700: v("brand-700"),
+          800: v("brand-800"),
+          900: v("brand-900"),
         },
-        accent: {
-          400: "#22c1d6",
-          500: "#12b0c9",
-          600: "#0e8fa6",
-        },
+        accent: { 400: v("accent-400"), 500: v("accent-500"), 600: v("accent-600") },
+        // Cool-tinted neutrals.
         ink: {
-          900: "#101828",
-          800: "#1d2939",
-          700: "#344054",
-          600: "#475467",
-          500: "#667085",
-          400: "#98a2b3",
+          900: v("ink-900"),
+          800: v("ink-800"),
+          700: v("ink-700"),
+          600: v("ink-600"),
+          500: v("ink-500"),
+          400: v("ink-400"),
+          300: v("ink-300"),
+          200: v("ink-200"),
         },
-        line: "#e7eaf0",
-        surface: "#f7f8fb",
+        canvas: v("canvas"),
+        surface: v("surface"),
+        line: { DEFAULT: v("line"), strong: v("line-strong") },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
-      boxShadow: {
-        card: "0 1px 2px rgba(16,24,40,.04), 0 8px 28px rgba(16,24,40,.05)",
-        pop: "0 12px 40px rgba(16,24,40,.14)",
+      fontSize: {
+        // Display steps: tracking and line-height tighten as size grows.
+        "display-xl": ["4.5rem", { lineHeight: "1.02", letterSpacing: "-0.038em" }],
+        "display-lg": ["3.5rem", { lineHeight: "1.04", letterSpacing: "-0.032em" }],
+        "display-md": ["2.5rem", { lineHeight: "1.1", letterSpacing: "-0.026em" }],
+        "display-sm": ["2rem", { lineHeight: "1.15", letterSpacing: "-0.022em" }],
+        title: ["1.375rem", { lineHeight: "1.3", letterSpacing: "-0.012em" }],
+        lead: ["1.125rem", { lineHeight: "1.6", letterSpacing: "-0.005em" }],
       },
       borderRadius: {
-        xl: "14px",
-        "2xl": "18px",
+        lg: "8px",
+        xl: "10px",
+        "2xl": "12px",
+        "3xl": "16px",
+      },
+      boxShadow: {
+        xs: "var(--shadow-xs)",
+        card: "var(--shadow-sm)",
+        md: "var(--shadow-md)",
+        pop: "var(--shadow-lg)",
+        frame: "var(--shadow-frame)",
+      },
+      transitionTimingFunction: {
+        out: "cubic-bezier(0.23, 1, 0.32, 1)",
+        "out-expo": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "in-out": "cubic-bezier(0.77, 0, 0.175, 1)",
+      },
+      maxWidth: {
+        container: "1200px",
       },
     },
   },

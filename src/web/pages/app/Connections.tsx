@@ -39,7 +39,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
     <div className="fixed inset-0 z-50 bg-ink-900/40 grid place-items-center p-4" onClick={onClose}>
       <div className="card w-full max-w-md p-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-          <h3 className="font-bold text-ink-900">{title}</h3>
+          <h3 className="font-semibold text-ink-900">{title}</h3>
           <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
             <X size={20} />
           </button>
@@ -87,7 +87,7 @@ export default function Connections() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl px-6 py-8">
-        <h1 className="text-2xl font-bold text-ink-900">Connections</h1>
+        <h1 className="text-2xl font-semibold text-ink-900">Connections</h1>
         <p className="mt-1 text-ink-500">Connect your channels once. Your agent sees the recent messages and can send on your behalf.</p>
 
         {banner && (
@@ -106,11 +106,11 @@ export default function Connections() {
             return (
               <div key={p.key} className="card p-5 flex flex-col">
                 <div className="flex items-center gap-3">
-                  <span className="h-11 w-11 rounded-xl grid place-items-center text-white font-bold" style={{ background: p.color }}>
+                  <span className="h-11 w-11 rounded-xl grid place-items-center text-white font-semibold" style={{ background: p.color }}>
                     {p.name.slice(0, 2)}
                   </span>
                   <div className="flex-1">
-                    <div className="font-bold text-ink-900">{p.name}</div>
+                    <div className="font-semibold text-ink-900">{p.name}</div>
                     <div className="text-sm text-ink-500 truncate">{conn?.displayName && isConnected ? conn.displayName : "Not connected"}</div>
                   </div>
                   {status && <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.cls}`}>{status.label}</span>}
@@ -202,7 +202,7 @@ function WhatsAppModal({ onClose }: { onClose: () => void }) {
             <div className="mx-auto grid place-items-center h-16 w-16 rounded-full bg-emerald-50">
               <Check size={34} />
             </div>
-            <p className="mt-3 font-bold text-ink-900">WhatsApp connected!</p>
+            <p className="mt-3 font-semibold text-ink-900">WhatsApp connected!</p>
             <p className="text-sm text-ink-500">Syncing your groups now…</p>
           </div>
         </div>
@@ -210,7 +210,7 @@ function WhatsAppModal({ onClose }: { onClose: () => void }) {
         <div className="grid place-items-center h-64 text-center px-4">
           <div>
             <span className="mx-auto block h-12 w-12 rounded-full border-[3px] border-brand-500 border-t-transparent animate-spin" />
-            <p className="mt-4 font-bold text-ink-900">Linking your WhatsApp…</p>
+            <p className="mt-4 font-semibold text-ink-900">Linking your WhatsApp…</p>
             <p className="mt-1 text-sm text-ink-500">
               Scan detected — WhatsApp is pairing this device. This can take up to a minute, so please keep this open.
             </p>

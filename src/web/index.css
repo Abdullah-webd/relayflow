@@ -2,8 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   Design tokens (RelayFlow). RGB channels so Tailwind opacity
+   modifiers work. Components use these names, never raw hex.
+   ============================================================ */
 :root {
   color-scheme: light;
+
+  /* Brand = the logo color (indigo). brand-600 passes AA (6.3:1) as text on white. */
+  --brand-50: 238 241 255;
+  --brand-100: 224 229 255;
+  --brand-200: 198 204 255;
+  --brand-300: 163 168 252;
+  --brand-400: 131 128 246;
+  --brand-500: 99 91 247;
+  --brand-600: 79 70 229;
+  --brand-700: 67 56 202;
+  --brand-800: 55 48 163;
+  --brand-900: 46 42 118;
+
+  /* Secondary accent = the logo cyan. Use sparingly. */
+  --accent-400: 34 193 214;
+  --accent-500: 18 176 201;
+  --accent-600: 14 143 166;
+
+  /* Cool-tinted neutrals. ink-500 passes AA (4.8:1) on white. */
+  --ink-900: 18 21 27;
+  --ink-800: 31 36 44;
+  --ink-700: 58 65 76;
+  --ink-600: 77 85 98;
+  --ink-500: 106 114 128;
+  --ink-400: 154 161 172;
+  --ink-300: 200 205 212;
+  --ink-200: 227 230 234;
+
+  --canvas: 255 255 255; /* page backgrounds are always white (user preference) */
+  --surface: 246 247 248;
+  --line: 230 232 236;
+  --line-strong: 216 220 226;
+
+  /* Elevation: layered, tinted toward the ink hue, one light source. */
+  --shadow-xs: 0 1px 2px rgb(18 21 27 / 0.05);
+  --shadow-sm: 0 1px 2px -1px rgb(18 21 27 / 0.06), 0 1px 3px rgb(18 21 27 / 0.04);
+  --shadow-md: 0 2px 4px -2px rgb(18 21 27 / 0.06), 0 8px 16px -4px rgb(18 21 27 / 0.08);
+  --shadow-lg: 0 4px 8px -4px rgb(18 21 27 / 0.08), 0 24px 48px -12px rgb(18 21 27 / 0.16);
+  --shadow-frame: 0 0 0 1px rgb(18 21 27 / 0.06), 0 2px 4px -2px rgb(18 21 27 / 0.06),
+    0 24px 48px -16px rgb(18 21 27 / 0.18), 0 48px 96px -32px rgb(79 70 229 / 0.14);
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 html,
@@ -12,45 +59,159 @@ body,
   height: 100%;
 }
 
-body {
-  @apply bg-white text-ink-800 antialiased;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-white text-ink-800;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-optical-sizing: auto; /* Inter's display cut at large sizes */
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  ::selection {
+    background: rgb(var(--brand-500) / 0.18);
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--brand-600));
+    outline-offset: 2px;
+  }
+  [id] {
+    scroll-margin-top: 88px;
+  }
 }
 
 /* Thin, unobtrusive scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #d5d9e2 transparent;
+  scrollbar-color: rgb(var(--ink-300)) transparent;
 }
 *::-webkit-scrollbar {
   width: 9px;
   height: 9px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #d5d9e2;
+  background: rgb(var(--ink-300));
   border-radius: 999px;
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 h-11 text-[15px] font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 h-10 text-[14px] font-medium whitespace-nowrap select-none disabled:opacity-50 disabled:cursor-not-allowed;
+    transition: transform 160ms var(--ease-out), background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
   }
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  /* Primary action uses the brand (logo) color: solid, crisp, no glow. */
   .btn-primary {
-    @apply btn bg-brand-600 text-white hover:bg-brand-700 shadow-[0_8px_20px_rgba(79,70,229,.22)];
+    @apply btn bg-brand-600 text-white;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 0 0 1px rgb(var(--brand-700)), 0 1px 2px rgb(var(--brand-900) / 0.25);
   }
   .btn-ghost {
-    @apply btn border border-line text-ink-700 hover:bg-surface;
+    @apply btn bg-white border border-line-strong text-ink-800;
+    box-shadow: var(--shadow-xs);
   }
   .btn-danger {
-    @apply btn border border-red-200 text-red-600 hover:bg-red-50;
+    @apply btn bg-white border border-red-200 text-red-600;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-primary:hover:not(:disabled) {
+      @apply bg-brand-700;
+    }
+    .btn-ghost:hover:not(:disabled) {
+      @apply bg-surface border-ink-300;
+    }
+    .btn-danger:hover:not(:disabled) {
+      @apply bg-red-50;
+    }
   }
   .input {
-    @apply w-full rounded-xl border border-line bg-white px-3.5 h-11 text-[15px] text-ink-900 outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 placeholder:text-ink-400;
+    @apply w-full rounded-lg border border-line-strong bg-white px-3 h-10 text-[16px] sm:text-[14px] text-ink-900 outline-none placeholder:text-ink-400;
+    box-shadow: var(--shadow-xs);
+    transition: border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .input:focus {
+    @apply border-brand-500;
+    box-shadow: 0 0 0 3px rgb(var(--brand-500) / 0.15);
   }
   .label {
-    @apply block text-sm font-semibold text-ink-700 mb-1.5;
+    @apply block text-[13px] font-medium text-ink-700 mb-1.5;
   }
   .card {
     @apply rounded-2xl border border-line bg-white shadow-card;
+  }
+  .kbd {
+    @apply inline-flex items-center rounded-[5px] border border-line-strong bg-white px-1.5 font-mono text-[11px] text-ink-600;
+  }
+}
+
+/* ---------- Motion ---------- */
+
+/* Hero entrance: one choreographed moment, CSS-only (visible without JS). */
+@media (prefers-reduced-motion: no-preference) {
+  .rf-in {
+    animation: rf-in 700ms var(--ease-out-expo) both;
+    animation-delay: calc(var(--i, 0) * 90ms);
+  }
+  .rf-frame-in {
+    animation: rf-frame-in 1000ms var(--ease-out-expo) 360ms both;
+  }
+  /* Messages inside the hero product window arrive in sequence. */
+  .rf-msg {
+    animation: rf-msg 520ms var(--ease-out) both;
+    animation-delay: calc(900ms + var(--i, 0) * 420ms);
+  }
+  /* Scroll reveal (class toggled once by <Reveal>). */
+  .rf-reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 560ms var(--ease-out), transform 560ms var(--ease-out);
+    transition-delay: var(--d, 0ms);
+  }
+  .rf-reveal.is-in {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes rf-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+    filter: blur(6px);
+  }
+}
+@keyframes rf-frame-in {
+  from {
+    opacity: 0;
+    transform: translateY(32px) scale(0.985);
+  }
+}
+@keyframes rf-msg {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

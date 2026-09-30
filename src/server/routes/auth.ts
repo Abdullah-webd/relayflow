@@ -5,6 +5,8 @@ import { authCodes, users, type User } from "../db";
 import { env } from "../env";
 import { randomOtp, sha256, uid } from "../lib/crypto";
 import { sendEmail, brandedEmail } from "../lib/email";
+import { effectiveStatus } from "../billing/plans";
+import { startTrialIfEligible, userCanUse } from "../billing/access";
 import { createSession, destroyAllSessions, destroySession } from "../auth/session";
 import {
   SESSION_COOKIE,
@@ -23,8 +25,9 @@ function publicUser(user: User) {
     emailVerified: user.emailVerified,
     timezone: user.timezone,
     plan: user.plan ?? null,
-    subscriptionStatus: user.subscriptionStatus ?? "none",
+    subscriptionStatus: effectiveStatus(user),
     trialEndsAt: user.trialEndsAt ?? null,
+    hasAccess: userCanUse(user),
     currentPeriodEnd: user.currentPeriodEnd ?? null,
     paywallDisabled: env.paywallDisabled,
   };
@@ -127,10 +130,12 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user) return reply.code(400).send({ error: "invalid_code", detail: "That code is invalid or expired." });
     const ok = await consumeOtp(user._id, "verify_email", parsed.data.code);
     if (!ok) return reply.code(400).send({ error: "invalid_code", detail: "That code is invalid or expired." });
+    // First verification of a brand-new account starts the no-card free trial.
+    const trial = await startTrialIfEligible(user);
     await users().updateOne({ _id: user._id }, { $set: { emailVerified: true, updatedAt: new Date() } });
     const token = await createSession(user._id);
     setSessionCookie(reply, token);
-    return reply.send({ status: "verified", user: publicUser({ ...user, emailVerified: true }) });
+    return reply.send({ status: "verified", user: publicUser({ ...user, ...(trial ?? {}), emailVerified: true }) });
   });
 
   app.post("/resend-otp", async (req, reply) => {
@@ -197,6 +202,8 @@ export async function authRoutes(app: FastifyInstance) {
     const ok = await consumeOtp(user._id, "password_reset", parsed.data.code);
     if (!ok) return reply.code(400).send({ error: "invalid_code", detail: "That code is invalid or expired." });
     const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+    // Resetting also verifies the email, so a never-verified new account starts its trial here too.
+    await startTrialIfEligible(user);
     await users().updateOne({ _id: user._id }, { $set: { passwordHash, emailVerified: true, updatedAt: new Date() } });
     await destroyAllSessions(user._id);
     return reply.send({ status: "password_reset" });
