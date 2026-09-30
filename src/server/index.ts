@@ -14,7 +14,7 @@ import { connectionRoutes } from "./routes/connections";
 import { taskRoutes } from "./routes/tasks";
 import { monitorRoutes } from "./routes/monitors";
 import { knowledgeRoutes } from "./routes/knowledge";
-import { billingRoutes } from "./routes/billing";
+import { billingRoutes, stripeWebhookHandler } from "./routes/billing";
 import { resumeConnections } from "./connectors/manager";
 import { startScheduler } from "./scheduler";
 
@@ -49,6 +49,9 @@ async function main() {
   });
 
   app.get("/api/health", async () => ({ status: "ok", time: new Date().toISOString() }));
+  // Stripe webhook at the root path — the configured Stripe endpoint is /webhooks.
+  // (Also available at /api/webhooks/stripe via billingRoutes.)
+  app.post("/webhooks", stripeWebhookHandler);
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(billingRoutes, { prefix: "/api" });
   await app.register(chatRoutes, { prefix: "/api" });

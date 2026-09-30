@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { env } from "../env";
 import { users } from "../db";
@@ -16,6 +16,25 @@ function appOrigin(req: FastifyRequest): string {
   const proto = (req.headers["x-forwarded-proto"] as string) || (env.isProd ? "https" : "http");
   const host = req.headers["host"] || "localhost:8000";
   return `${proto}://${host}`;
+}
+
+/**
+ * Verify + process a Stripe webhook. Shared so it can be mounted at both the API path
+ * (/api/webhooks/stripe) and the root path (/webhooks) that the Stripe endpoint is
+ * configured to hit. Raw body is captured by the content-type parser in index.ts.
+ */
+export async function stripeWebhookHandler(req: FastifyRequest, reply: FastifyReply) {
+  if (!env.stripe.enabled || !env.stripe.webhookSecret) return reply.code(503).send({ error: "webhooks_disabled" });
+  const signature = req.headers["stripe-signature"] as string | undefined;
+  const raw = (req as any).rawBody as string | undefined;
+  if (!signature || !raw) return reply.code(400).send({ error: "bad_signature" });
+  try {
+    const type = await handleWebhook(raw, signature);
+    return reply.send({ received: true, type });
+  } catch (error) {
+    console.error(`[billing] webhook error: ${(error as Error).message}`);
+    return reply.code(400).send({ error: "webhook_error" });
+  }
 }
 
 export async function billingRoutes(app: FastifyInstance) {
@@ -92,18 +111,6 @@ export async function billingRoutes(app: FastifyInstance) {
     }
   });
 
-  // Stripe webhook — raw body is captured by the content-type parser in index.ts.
-  app.post("/webhooks/stripe", async (req, reply) => {
-    if (!env.stripe.enabled || !env.stripe.webhookSecret) return reply.code(503).send({ error: "webhooks_disabled" });
-    const signature = req.headers["stripe-signature"] as string | undefined;
-    const raw = (req as any).rawBody as string | undefined;
-    if (!signature || !raw) return reply.code(400).send({ error: "bad_signature" });
-    try {
-      const type = await handleWebhook(raw, signature);
-      return reply.send({ received: true, type });
-    } catch (error) {
-      console.error(`[billing] webhook error: ${(error as Error).message}`);
-      return reply.code(400).send({ error: "webhook_error" });
-    }
-  });
+  // Stripe webhook (API path). The root-path alias /webhooks is registered in index.ts.
+  app.post("/webhooks/stripe", stripeWebhookHandler);
 }
