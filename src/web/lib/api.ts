@@ -15,6 +15,13 @@ export async function api<T = any>(path: string, opts: RequestInit = {}): Promis
   if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
   const res = await fetch(`/api${path}`, { credentials: "include", ...opts, headers });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.detail || data.error || "Request failed", res.status, data);
+  if (!res.ok) {
+    // A logged-in user without an active subscription (402) is pushed to the paywall.
+    // This makes the gate airtight in-session, not just on a full page load.
+    if (res.status === 402 && typeof window !== "undefined" && !window.location.pathname.startsWith("/pricing")) {
+      window.location.assign("/pricing");
+    }
+    throw new ApiError(data.detail || data.error || "Request failed", res.status, data);
+  }
   return data as T;
 }

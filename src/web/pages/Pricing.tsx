@@ -6,11 +6,10 @@ import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
 
 interface PlanView {
-  key: "starter" | "growth";
+  key: "pro";
   name: string;
   blurb: string;
   priceUsd: number;
-  credits: number;
   features: string[];
   popular: boolean;
 }
@@ -113,10 +112,10 @@ export default function Pricing() {
             <Sparkles size={15} /> Start with a {trialDays}-day free trial
           </span>
           <h1 className="mt-5 text-[34px] sm:text-[42px] leading-tight font-extrabold tracking-tight text-ink-900">
-            {user ? "Pick a plan to activate your account" : "Simple, usage-based pricing"}
+            {user ? "Activate your account" : "Simple, all-in pricing"}
           </h1>
           <p className="mt-4 text-lg text-ink-600">
-            Your card isn't charged during the free trial, and you can cancel anytime. A credit is one AI action.
+            One plan, everything included. Your card isn't charged during the free trial, and you can cancel anytime.
           </p>
         </div>
 
@@ -129,7 +128,7 @@ export default function Pricing() {
           <div className="mt-8 max-w-xl mx-auto rounded-xl border border-red-200 bg-red-50 text-red-700 px-4 py-3 text-[15px]">{error}</div>
         )}
 
-        <div className="mt-12 grid sm:grid-cols-2 gap-6 max-w-3xl mx-auto">
+        <div className="mt-12 grid gap-6 max-w-md mx-auto">
           {plans.map((p) => (
             <div
               key={p.key}

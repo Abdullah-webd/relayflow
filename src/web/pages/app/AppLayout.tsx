@@ -95,7 +95,7 @@ export default function AppLayout() {
         ))}
       </nav>
 
-      {/* Credits chip */}
+      {/* Plan chip */}
       {(!compact || mobileOpen) && (
         <Link
           to="/app/settings"
@@ -103,9 +103,17 @@ export default function AppLayout() {
           className="mx-3 mb-1 flex items-center justify-between rounded-xl border border-line px-3 py-2.5 hover:bg-surface"
         >
           <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink-700">
-            <Zap size={16} className="text-brand-600" /> {user?.paywallDisabled ? "Access" : "Credits"}
+            <Zap size={16} className="text-brand-600" /> Plan
           </span>
-          <span className="text-sm font-bold text-ink-900">{user?.paywallDisabled ? "Free" : user?.credits ?? 0}</span>
+          <span className="text-sm font-bold text-ink-900">
+            {user?.paywallDisabled
+              ? "Free"
+              : user?.subscriptionStatus === "trialing"
+              ? "Trial"
+              : user?.subscriptionStatus === "active"
+              ? "Pro"
+              : "—"}
+          </span>
         </Link>
       )}
 

@@ -1,7 +1,7 @@
 import Stripe from "stripe";
 import { env } from "../env";
 import { users, type SubscriptionStatus, type User } from "../db";
-import { PLANS, TRIAL_DAYS, isActiveStatus, planByLookupKey, type PlanKey } from "./plans";
+import { PLANS, TRIAL_DAYS, DEFAULT_PLAN, planByLookupKey, type PlanKey } from "./plans";
 
 let client: Stripe | null = null;
 export function getStripe(): Stripe {
@@ -43,8 +43,18 @@ export async function ensurePrices(): Promise<Record<PlanKey, string>> {
 }
 
 async function ensureCustomer(user: User): Promise<string> {
-  if (user.stripeCustomerId) return user.stripeCustomerId;
   const stripe = getStripe();
+  // Reuse the saved customer only if it still exists in the CURRENT Stripe mode.
+  // (A customer created while testing in test mode is invalid once we switch to live
+  // keys — reusing it makes checkout fail with "No such customer". Self-heal instead.)
+  if (user.stripeCustomerId) {
+    try {
+      const existing = await stripe.customers.retrieve(user.stripeCustomerId);
+      if (existing && !(existing as any).deleted) return user.stripeCustomerId;
+    } catch {
+      // Falls through to create a fresh customer below.
+    }
+  }
   const customer = await stripe.customers.create({
     email: user.email,
     name: user.name || undefined,
@@ -105,7 +115,7 @@ function mapStatus(status: Stripe.Subscription.Status): SubscriptionStatus {
   }
 }
 
-/** Write a Stripe subscription's state onto the user, granting credits once per period. */
+/** Write a Stripe subscription's state onto the user. Access is subscription-based (no credits). */
 export async function syncUserFromSubscription(userId: string, sub: Stripe.Subscription): Promise<void> {
   const item = sub.items.data[0];
   const lookupKey = item?.price?.lookup_key ?? undefined;
@@ -117,23 +127,12 @@ export async function syncUserFromSubscription(userId: string, sub: Stripe.Subsc
   const update: Partial<User> = {
     stripeSubscriptionId: sub.id,
     subscriptionStatus: mapStatus(sub.status),
-    plan: plan?.key ?? null,
+    plan: plan?.key ?? DEFAULT_PLAN,
     currentPeriodEnd: periodEnd,
     trialEndsAt: trialEnd,
     cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
     updatedAt: new Date(),
   };
-
-  // Grant this period's credits exactly once (when the period boundary advances).
-  if (isActiveStatus(sub.status) && plan) {
-    const existing = await users().findOne({ _id: userId });
-    const prevPeriod = existing?.creditPeriodEnd ? existing.creditPeriodEnd.getTime() : 0;
-    const newPeriod = periodEnd ? periodEnd.getTime() : 0;
-    if (newPeriod !== prevPeriod) {
-      update.credits = plan.credits;
-      update.creditPeriodEnd = periodEnd;
-    }
-  }
   await users().updateOne({ _id: userId }, { $set: update });
 }
 
@@ -193,13 +192,4 @@ export async function handleWebhook(rawBody: Buffer | string, signature: string)
     }
   }
   return event.type;
-}
-
-/** Atomically spend `amount` credits; false if the user doesn't have enough. */
-export async function tryConsumeCredits(userId: string, amount: number): Promise<boolean> {
-  const res = await users().findOneAndUpdate(
-    { _id: userId, credits: { $gte: amount } },
-    { $inc: { credits: -amount } },
-  );
-  return Boolean(res);
 }

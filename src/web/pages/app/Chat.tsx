@@ -145,12 +145,13 @@ export default function Chat() {
         body: JSON.stringify({ message: text }),
       });
       if (res.status === 402) {
-        const data = await res.json().catch(() => ({}));
+        // No active subscription/trial — send them to the paywall.
         patchAssistant(asstId, (m) => ({
           ...m,
           pending: false,
-          content: data.detail || "You're out of AI credits. Upgrade your plan in Settings to keep going.",
+          content: "Your plan isn't active. Redirecting you to choose a plan…",
         }));
+        window.location.assign("/pricing");
         return;
       }
       if (!res.ok || !res.body) throw new Error("Request failed");

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { env } from "../env";
 import { users } from "../db";
 import { requireAuth } from "../auth/context";
-import { PLAN_LIST, TRIAL_DAYS } from "../billing/plans";
+import { PLAN_LIST, TRIAL_DAYS, DEFAULT_PLAN } from "../billing/plans";
 import {
   confirmCheckout,
   createCheckoutSession,
@@ -47,7 +47,6 @@ export async function billingRoutes(app: FastifyInstance) {
       name: p.name,
       blurb: p.blurb,
       priceUsd: p.priceUsd,
-      credits: p.credits,
       features: p.features,
       popular: Boolean(p.popular),
     })),
@@ -59,23 +58,23 @@ export async function billingRoutes(app: FastifyInstance) {
     return {
       plan: user?.plan ?? null,
       status: user?.subscriptionStatus ?? "none",
-      credits: user?.credits ?? 0,
       trialEndsAt: user?.trialEndsAt ?? null,
       currentPeriodEnd: user?.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: Boolean(user?.cancelAtPeriodEnd),
     };
   });
 
-  // Start a subscription (1-day free trial, card required) via Stripe Checkout.
+  // Start the subscription (1-day free trial, card required) via Stripe Checkout.
   app.post("/billing/checkout", { preHandler: requireAuth }, async (req, reply) => {
     if (!env.stripe.enabled) return reply.code(503).send({ error: "billing_unavailable" });
-    const parsed = z.object({ plan: z.enum(["starter", "growth"]) }).safeParse(req.body);
+    // Single plan: accept an optional key but always fall back to the default plan.
+    const parsed = z.object({ plan: z.enum(["pro"]).optional() }).safeParse(req.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
     const user = await users().findOne({ _id: req.userId! });
     if (!user) return reply.code(401).send({ error: "unauthorized" });
     if (!user.emailVerified) return reply.code(403).send({ error: "email_unverified" });
     try {
-      const url = await createCheckoutSession(user, parsed.data.plan, appOrigin(req));
+      const url = await createCheckoutSession(user, parsed.data.plan ?? DEFAULT_PLAN, appOrigin(req));
       return reply.send({ url });
     } catch (error) {
       console.error(`[billing] checkout failed: ${(error as Error).message}`);

@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
 import { api } from "../../lib/api";
-import { CreditCard, Loader2, Check, Zap, ExternalLink } from "lucide-react";
+import { CreditCard, Loader2, Check, ExternalLink } from "lucide-react";
 
 interface BillingState {
-  plan: "starter" | "growth" | null;
+  plan: "pro" | null;
   status: string;
-  credits: number;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
@@ -24,7 +23,7 @@ const TIMEZONES: string[] = (() => {
   return ["UTC", "Africa/Lagos", "Europe/London", "America/New_York", "America/Los_Angeles", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore"];
 })();
 
-const PLAN_NAMES: Record<string, string> = { starter: "Starter", growth: "Growth" };
+const PLAN_NAMES: Record<string, string> = { pro: "Pro" };
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -187,16 +186,6 @@ export default function Settings() {
                 {portalBusy ? <Loader2 className="animate-spin" size={18} /> : <>Manage billing <ExternalLink size={16} /></>}
               </button>
             </div>
-          </div>
-
-          <div className="mt-4 rounded-xl border border-line p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-semibold text-ink-900">
-                <Zap size={18} className="text-brand-600" /> AI credits
-              </div>
-              <span className="font-bold text-ink-900">{billing?.credits ?? 0} left</span>
-            </div>
-            <p className="mt-1.5 text-sm text-ink-500">Each AI action uses one credit. Credits refill at the start of every billing period.</p>
           </div>
         </Section>
 

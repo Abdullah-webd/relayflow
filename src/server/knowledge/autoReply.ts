@@ -3,8 +3,6 @@ import { env } from "../env";
 import { autoReplies, users, type Platform } from "../db";
 import { uid } from "../lib/crypto";
 import { getKnowledgeContext } from "./knowledge";
-import { tryConsumeCredits } from "../billing/stripe";
-import { CREDITS_PER_MESSAGE } from "../billing/plans";
 import { sendToTargets, type SendTarget } from "../connectors/manager";
 import { sendGmail } from "../connectors/gmail";
 
@@ -108,12 +106,6 @@ export async function handleInbound(msg: InboundMessage): Promise<{ replied: boo
 
     const { guardrails, text, hasContent } = await getKnowledgeContext(msg.userId);
     if (!hasContent) return { replied: false, reason: "no knowledge base" };
-
-    // Each decision costs one credit (an AI action).
-    if (env.creditsEnforced) {
-      const paid = await tryConsumeCredits(msg.userId, CREDITS_PER_MESSAGE);
-      if (!paid) return { replied: false, reason: "out of credits" };
-    }
 
     const decision = await decideReply(guardrails, text, msg.senderName, msg.text);
     let replied = false;

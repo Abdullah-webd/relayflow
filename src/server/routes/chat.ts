@@ -3,9 +3,6 @@ import { z } from "zod";
 import { chats, chatMessages, users } from "../db";
 import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
-import { env } from "../env";
-import { tryConsumeCredits } from "../billing/stripe";
-import { CREDITS_PER_MESSAGE } from "../billing/plans";
 import { streamRun, acknowledgeAction } from "../agent/agent";
 import { sendToTargets, type SendTarget } from "../connectors/manager";
 import type { Platform } from "../db";
@@ -101,14 +98,6 @@ export async function chatRoutes(app: FastifyInstance) {
     const chat = await chats().findOne({ _id: id, userId });
     if (!chat) return reply.code(404).send({ error: "not_found" });
 
-    // Each agent turn costs credits. Consume up-front; refunded below if the run errors.
-    if (env.creditsEnforced) {
-      const paid = await tryConsumeCredits(userId, CREDITS_PER_MESSAGE);
-      if (!paid) {
-        return reply.code(402).send({ error: "insufficient_credits", detail: "You're out of AI credits. Upgrade your plan to keep going." });
-      }
-    }
-
     const message = body.data.message.trim();
     const now = new Date();
     // Recent conversation history (loaded BEFORE adding the new message) — passed to the
@@ -144,8 +133,6 @@ export async function chatRoutes(app: FastifyInstance) {
       write({ type: "completed", toolResults, messageId: assistantMessageId });
     } catch (error) {
       console.error("[chat.stream]", (error as Error).message);
-      // Refund the credit we charged up-front since the turn didn't complete.
-      if (env.creditsEnforced) await users().updateOne({ _id: userId }, { $inc: { credits: CREDITS_PER_MESSAGE } }).catch(() => undefined);
       write({ type: "error", detail: "The agent could not complete this request. Please try again." });
     }
     reply.raw.end();

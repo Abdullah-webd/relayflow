@@ -9,9 +9,8 @@ export interface User {
   name: string;
   emailVerified: boolean;
   timezone: string;
-  plan: "starter" | "growth" | null;
+  plan: "pro" | null;
   subscriptionStatus: SubStatus;
-  credits: number;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
   paywallDisabled?: boolean;

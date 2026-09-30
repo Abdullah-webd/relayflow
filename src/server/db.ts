@@ -27,15 +27,13 @@ export interface User {
   emailVerified: boolean;
   timezone: string;
   // ---- Billing ----
-  plan?: "starter" | "growth" | null;
+  plan?: "pro" | null;
   subscriptionStatus?: SubscriptionStatus;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
   trialEndsAt?: Date | null;
   currentPeriodEnd?: Date | null;
   cancelAtPeriodEnd?: boolean;
-  credits?: number;
-  creditPeriodEnd?: Date | null; // period boundary the current credit grant belongs to
   createdAt: Date;
   updatedAt: Date;
 }

@@ -24,7 +24,6 @@ function publicUser(user: User) {
     timezone: user.timezone,
     plan: user.plan ?? null,
     subscriptionStatus: user.subscriptionStatus ?? "none",
-    credits: user.credits ?? 0,
     trialEndsAt: user.trialEndsAt ?? null,
     currentPeriodEnd: user.currentPeriodEnd ?? null,
     paywallDisabled: env.paywallDisabled,

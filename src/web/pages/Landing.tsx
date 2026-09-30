@@ -107,29 +107,17 @@ const customers: Customer[] = [
 
 const pricing = [
   {
-    name: "Starter",
-    price: "10",
-    tagline: "For individuals & small teams.",
-    popular: false,
-    features: [
-      "500 AI credits / month",
-      "All 4 channels — WhatsApp, Telegram, Slack, Gmail",
-      "Approve-before-send on every action",
-      "Scheduled tasks in plain English",
-      "Multi-session chat",
-    ],
-  },
-  {
-    name: "Growth",
-    price: "30",
-    tagline: "For busy teams & agencies.",
+    name: "Pro",
+    price: "15",
+    tagline: "Everything RelayFlow does, one simple price.",
     popular: true,
     features: [
-      "2,000 AI credits / month",
-      "Everything in Starter",
-      "Priority processing",
-      "All 4 channels & broadcast to all",
-      "Multi-session chat",
+      "Unlimited AI actions — no usage credits",
+      "All 4 channels — WhatsApp, Telegram, Slack, Gmail",
+      "Approve-before-send on every action",
+      "Scheduled tasks & smart monitors",
+      "Auto-replies from your knowledge base",
+      "Multi-session chat & broadcast to all",
     ],
   },
 ];
@@ -148,12 +136,12 @@ const faqs = [
     a: "Absolutely. Ask RelayFlow to message one specific group or broadcast to every connected channel at the same time. You approve the draft before anything is delivered.",
   },
   {
-    q: "What are AI credits?",
-    a: "A credit is one AI agent action — a summary, an answer, a drafted message, or a send. Starter includes 500 credits/month and Growth includes 2,000.",
+    q: "How much does RelayFlow cost?",
+    a: "One simple plan at $15/month with everything included — unlimited AI actions, all four channels, scheduled tasks and monitors. It starts with a 1-day free trial (card required).",
   },
   {
     q: "Can I cancel anytime?",
-    a: "Yes. Both plans start with a 1-day free trial (card required), and you can cancel whenever you like — no long-term contract.",
+    a: "Yes. Every account starts with a 1-day free trial (card required), and you can cancel whenever you like — no long-term contract.",
   },
   {
     q: "Which channels can I connect?",
@@ -521,14 +509,14 @@ export default function Landing() {
           <div className="mx-auto max-w-6xl px-5 sm:px-6 py-16 sm:py-20">
             <div className="max-w-2xl mx-auto text-center">
               <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-ink-900">
-                Simple, credit-based pricing
+                Simple, all-in pricing
               </h2>
               <p className="mt-3 text-[15px] sm:text-lg text-ink-600 leading-relaxed">
-                A credit is one AI agent action. Every plan starts with a 1-day free
-                trial (card required).
+                One plan, everything included. Starts with a 1-day free trial
+                (card required) — cancel anytime.
               </p>
             </div>
-            <div className="mt-12 grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            <div className="mt-12 grid gap-6 max-w-md mx-auto">
               {pricing.map((p) => (
                 <div
                   key={p.name}

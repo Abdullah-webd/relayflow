@@ -2,9 +2,6 @@ import { monitors, users, connections, type Monitor, type Platform } from "./db"
 import { getRecentMessages } from "./connectors/manager";
 import { judgeMonitor } from "./agent/monitorJudge";
 import { sendEmail } from "./lib/email";
-import { env } from "./env";
-import { tryConsumeCredits } from "./billing/stripe";
-import { CREDITS_PER_MESSAGE } from "./billing/plans";
 
 export const MIN_INTERVAL_MINUTES = 15;
 export const DEFAULT_INTERVAL_MINUTES = 30;
@@ -50,15 +47,6 @@ async function runMonitor(m: Monitor): Promise<void> {
   // Cheap-and-safe optimization: if nothing new arrived, don't spend an LLM call.
   let judged = { matched: false, summary: "" };
   if (fresh.length > 0) {
-    if (env.creditsEnforced) {
-      const paid = await tryConsumeCredits(m.userId, CREDITS_PER_MESSAGE);
-      if (!paid) {
-        // Out of credits: don't advance the watermark, so these messages get judged once
-        // the user tops up. Just note it and wait for the next interval.
-        await monitors().updateOne({ _id: m._id }, { $set: { lastCheckedAt: now, updatedAt: now, lastResult: "Skipped — out of AI credits" } });
-        return;
-      }
-    }
     judged = await judgeMonitor(
       m.condition,
       fresh.map((f) => ({ from: f.senderName, text: f.text, channel: f.destinationName, at: f.occurredAt.toISOString() })),
