@@ -4,6 +4,7 @@ import { Logo } from "../components/Logo";
 import { Reveal } from "../components/Reveal";
 import { ChannelMark, CHANNEL_COLOR, CHANNEL_NAME, type Channel } from "../components/ChannelMark";
 import { useAuth } from "../lib/auth";
+import { PRICE_USD } from "../lib/pricing";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -70,7 +71,7 @@ const faqs = [
   },
   {
     q: "Does it store my whole message history?",
-    a: "No. RelayFlow keeps only recent context (about the last week) so it can answer questions and summarize. It doesn't archive your full history.",
+    a: "No. RelayFlow keeps only recent messages so it can answer questions and summarize. Channel messages are deleted automatically after 14 days, and it never archives your full history.",
   },
   {
     q: "Can it send to all my channels at once?",
@@ -78,7 +79,7 @@ const faqs = [
   },
   {
     q: "How much does it cost?",
-    a: "One plan at $15 a month with everything included: unlimited AI actions, all four channels, scheduled tasks and monitors. Try it free for 1 day first. No credit card required.",
+    a: `One plan at $${PRICE_USD} a month with everything included: unlimited AI actions, all four channels, scheduled tasks and monitors. Try it free for 1 day first. No credit card required.`,
   },
   {
     q: "Can I cancel anytime?",
@@ -711,7 +712,7 @@ export default function Landing() {
                   { icon: ShieldCheck, t: "Approval before the agent sends", d: "Messages, broadcasts and scheduled tasks wait for your OK. Auto-replies run only on channels you switch them on for." },
                   { icon: KeyRound, t: "Official sign-in for Slack and Gmail", d: "Connected through OAuth. RelayFlow never sees your Slack or Google password." },
                   { icon: Lock, t: "Encrypted credentials", d: "Channel sessions and tokens are encrypted at the field level before they’re stored." },
-                  { icon: Clock, t: "Only recent context", d: "It keeps about a week of messages to answer questions, not your full history." },
+                  { icon: Clock, t: "Only recent context", d: "Channel messages are deleted automatically after 14 days. It never archives your full history." },
                 ].map((row) => (
                   <div key={row.t} className="flex gap-4 py-5">
                     <row.icon size={18} strokeWidth={1.75} className="mt-0.5 shrink-0 text-ink-500" />
@@ -777,7 +778,7 @@ export default function Landing() {
             <Reveal className="lg:col-span-5">
               <SectionHeading
                 title="One plan. Everything included."
-                body="Try everything free for 1 day, no credit card required. Then $15 a month. No usage credits, no tiers, no surprises."
+                body={`Try everything free for 1 day, no credit card required. Then $${PRICE_USD} a month. No usage credits, no tiers, no surprises.`}
               />
               <a href="#faq" className="mt-6 inline-flex items-center gap-1.5 text-[15px] font-medium text-brand-700 hover:text-brand-800 transition-colors">
                 Read the FAQ <ArrowRight size={15} />
@@ -790,7 +791,7 @@ export default function Landing() {
                   <span className="rounded-full border border-line px-2.5 h-6 inline-flex items-center text-[12px] text-ink-600">1-day free trial</span>
                 </div>
                 <div className="mt-6 flex items-baseline gap-1.5">
-                  <span className="text-display-lg font-semibold text-ink-900 tabular-nums">$15</span>
+                  <span className="text-display-lg font-semibold text-ink-900 tabular-nums">${PRICE_USD}</span>
                   <span className="text-[15px] text-ink-500">/month</span>
                 </div>
                 <ul className="mt-8 grid sm:grid-cols-2 gap-x-6 gap-y-3">
@@ -880,7 +881,7 @@ export default function Landing() {
               <Logo byline />
               <p className="mt-4 text-[14px] leading-relaxed text-ink-500">One AI agent across WhatsApp, Telegram, Slack and Gmail.</p>
             </div>
-            <div className="grid grid-cols-2 gap-10 sm:gap-16">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-10 sm:gap-16">
               <div>
                 <h3 className="text-[13px] font-medium text-ink-900">Product</h3>
                 <ul className="mt-4 space-y-2.5 text-[14px] text-ink-600">
@@ -895,6 +896,13 @@ export default function Landing() {
                 <ul className="mt-4 space-y-2.5 text-[14px] text-ink-600">
                   <li><Link to="/login" className="hover:text-ink-900 transition-colors">Sign in</Link></li>
                   <li><Link to="/signup" className="hover:text-ink-900 transition-colors">Start free trial</Link></li>
+                </ul>
+              </div>
+              <div>
+                <h3 className="text-[13px] font-medium text-ink-900">Legal</h3>
+                <ul className="mt-4 space-y-2.5 text-[14px] text-ink-600">
+                  <li><Link to="/privacy" className="hover:text-ink-900 transition-colors">Privacy Policy</Link></li>
+                  <li><Link to="/terms" className="hover:text-ink-900 transition-colors">Terms of Service</Link></li>
                 </ul>
               </div>
             </div>

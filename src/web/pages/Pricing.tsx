@@ -4,6 +4,7 @@ import { Check, ShieldCheck, Loader2, CircleAlert, Info, ArrowRight } from "luci
 import { Logo } from "../components/Logo";
 import { useAuth, hasActivePlan } from "../lib/auth";
 import { api } from "../lib/api";
+import { PRICE_USD } from "../lib/pricing";
 
 interface PlanView {
   key: "pro";
@@ -94,7 +95,7 @@ export default function Pricing() {
   }
 
   const plan = plans[0];
-  const price = plan?.priceUsd ?? 15;
+  const price = plan?.priceUsd ?? PRICE_USD;
 
   // Which situation is the visitor in?
   const s = user?.subscriptionStatus;

@@ -18,7 +18,11 @@ export default function AuthShell({ title, subtitle, children }: { title: string
           <div className="mt-8">{children}</div>
         </div>
       </main>
-      <footer className="px-5 pb-8 text-center text-[12px] text-ink-400">© {new Date().getFullYear()} RelayFlow</footer>
+      <footer className="px-5 pb-8 flex items-center justify-center gap-4 text-[12px] text-ink-400">
+        <span>© {new Date().getFullYear()} RelayFlow</span>
+        <Link to="/privacy" className="hover:text-ink-700 transition-colors">Privacy</Link>
+        <Link to="/terms" className="hover:text-ink-700 transition-colors">Terms</Link>
+      </footer>
     </div>
   );
 }

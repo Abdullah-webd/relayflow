@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
 import { api } from "../../lib/api";
+import { PRICE_USD } from "../../lib/pricing";
 import { CreditCard, Loader2, Check, ExternalLink } from "lucide-react";
 
 interface BillingState {
@@ -178,7 +179,7 @@ export default function Settings() {
                     : billing?.cancelAtPeriodEnd
                     ? `Cancels on ${fmt(billing?.currentPeriodEnd ?? null)}`
                     : billing?.currentPeriodEnd
-                    ? `Renews ${fmt(billing.currentPeriodEnd)} · $15/month`
+                    ? `Renews ${fmt(billing.currentPeriodEnd)} · $${PRICE_USD}/month`
                     : billing?.status === "active"
                     ? "Active"
                     : "Subscribe to use RelayFlow"}
@@ -192,7 +193,7 @@ export default function Settings() {
                 </button>
               ) : billing && billing.status !== "active" ? (
                 <button onClick={() => nav("/pricing")} className="btn-primary">
-                  Subscribe · $15/month
+                  Subscribe · ${PRICE_USD}/month
                 </button>
               ) : null}
             </div>

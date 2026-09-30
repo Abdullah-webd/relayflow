@@ -7,6 +7,7 @@ import { randomOtp, sha256, uid } from "../lib/crypto";
 import { sendEmail, brandedEmail } from "../lib/email";
 import { effectiveStatus } from "../billing/plans";
 import { startTrialIfEligible, userCanUse } from "../billing/access";
+import { TERMS_VERSION } from "../legal";
 import { createSession, destroyAllSessions, destroySession } from "../auth/session";
 import {
   SESSION_COOKIE,
@@ -88,6 +89,8 @@ export async function authRoutes(app: FastifyInstance) {
     email: z.string().email(),
     password: z.string().min(8).max(200),
     name: z.string().max(120).optional(),
+    // Required: the user must agree to the Terms of Service and Privacy Policy.
+    acceptTerms: z.literal(true, { errorMap: () => ({ message: "Please agree to the Terms of Service and Privacy Policy." }) }),
   });
 
   app.post("/signup", async (req, reply) => {
@@ -99,10 +102,12 @@ export async function authRoutes(app: FastifyInstance) {
     if (existing?.emailVerified) return reply.code(409).send({ error: "email_taken", detail: "An account with this email already exists." });
 
     const now = new Date();
+    // Record which version of the Terms/Privacy Policy was accepted, and when.
+    const consent = { termsAcceptedAt: now, termsVersion: TERMS_VERSION };
     let userId: string;
     if (existing) {
       userId = existing._id;
-      await users().updateOne({ _id: userId }, { $set: { passwordHash, name: parsed.data.name ?? existing.name, updatedAt: now } });
+      await users().updateOne({ _id: userId }, { $set: { passwordHash, name: parsed.data.name ?? existing.name, ...consent, updatedAt: now } });
     } else {
       userId = uid();
       await users().insertOne({
@@ -112,6 +117,7 @@ export async function authRoutes(app: FastifyInstance) {
         passwordHash,
         emailVerified: false,
         timezone: "Africa/Lagos",
+        ...consent,
         createdAt: now,
         updatedAt: now,
       });

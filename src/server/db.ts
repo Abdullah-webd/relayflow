@@ -37,6 +37,8 @@ export interface User {
   currentPeriodEnd?: Date | null;
   cancelAtPeriodEnd?: boolean;
   compAccess?: boolean; // complimentary access granted by the owner
+  termsAcceptedAt?: Date | null; // when the user agreed to the Terms + Privacy Policy
+  termsVersion?: string | null; // which version they agreed to (src/server/legal.ts)
   createdAt: Date;
   updatedAt: Date;
 }

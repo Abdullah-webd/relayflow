@@ -19,10 +19,10 @@ export const PLANS: Record<PlanKey, Plan> = {
     key: "pro",
     name: "Pro",
     blurb: "Everything RelayFlow does, one simple price",
-    priceUsd: 15,
-    amountCents: 1500,
-    // New lookup key for the $15 live price (distinct from any earlier test prices).
-    lookupKey: "rf_pro_monthly_v1",
+    priceUsd: 30,
+    amountCents: 3000,
+    // Stripe prices are immutable: a new amount needs a new lookup key (v1 was $15).
+    lookupKey: "rf_pro_monthly_v2",
     popular: true,
     features: [
       "Unlimited AI actions — no usage credits",

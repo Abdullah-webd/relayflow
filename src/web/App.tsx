@@ -2,6 +2,8 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth, hasActivePlan } from "./lib/auth";
 import Landing from "./pages/Landing";
 import Pricing from "./pages/Pricing";
+import Privacy from "./pages/legal/Privacy";
+import Terms from "./pages/legal/Terms";
 import Login from "./pages/auth/Login";
 import Signup from "./pages/auth/Signup";
 import Verify from "./pages/auth/Verify";
@@ -53,6 +55,8 @@ export default function App() {
       <Route path="/forgot" element={<Forgot />} />
       <Route path="/reset" element={<Reset />} />
       <Route path="/pricing" element={<Pricing />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/terms" element={<Terms />} />
       <Route
         path="/app"
         element={
