@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
+import { AnimatePresence } from "motion/react";
+import { Rise, SkeletonRows } from "../../components/motion";
+import { useStickyState } from "../../lib/sticky";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
 import { PRICES } from "../../lib/pricing";
@@ -50,7 +53,7 @@ function KnowledgeLocked() {
 }
 
 function KnowledgeEditor() {
-  const [data, setData] = useState<KnowledgeData | null>(null);
+  const [data, setData] = useStickyState<KnowledgeData | null>("knowledge", null);
   const [guardrails, setGuardrails] = useState("");
   const [savingGuard, setSavingGuard] = useState(false);
   const [guardSaved, setGuardSaved] = useState(false);
@@ -123,7 +126,15 @@ function KnowledgeEditor() {
     await api("/knowledge/auto-reply", { method: "PATCH", body: JSON.stringify({ destinationId: d.id, enabled: !d.autoReplyEnabled }) }).catch(() => load());
   }
 
-  if (!data) return <div className="h-full grid place-items-center text-ink-500">Loading…</div>;
+  if (!data)
+    return (
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-3xl px-6 py-8">
+          <div className="h-7 w-56 rounded-lg bg-surface animate-pulse" />
+          <div className="mt-6"><SkeletonRows rows={4} className="h-16" /></div>
+        </div>
+      </div>
+    );
   const anyOn = data.channels.some((c) => c.destinations.some((d) => d.autoReplyEnabled));
   const hasKnowledge = data.docs.length > 0;
 
@@ -228,8 +239,9 @@ function KnowledgeEditor() {
 
           <div className="mt-5 space-y-2">
             {data.docs.length === 0 && <p className="text-sm text-ink-400">No documents yet.</p>}
+            <AnimatePresence initial={false}>
             {data.docs.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 rounded-xl border border-line px-4 py-3">
+              <Rise key={d.id} stagger={false} className="flex items-center gap-3 rounded-xl border border-line px-4 py-3">
                 <span className="grid place-items-center h-9 w-9 rounded-lg bg-surface text-ink-500 shrink-0">
                   {d.source === "pdf" ? <FileText size={16} /> : <BookOpen size={16} />}
                 </span>
@@ -237,9 +249,10 @@ function KnowledgeEditor() {
                   <div className="font-semibold text-ink-900 truncate">{d.title}</div>
                   <div className="text-xs text-ink-400">{d.source.toUpperCase()} · {d.chars.toLocaleString()} chars</div>
                 </div>
-                <button onClick={() => removeDoc(d.id)} className="text-ink-400 hover:text-red-500"><Trash2 size={17} /></button>
-              </div>
+                <button onClick={() => removeDoc(d.id)} className="text-ink-400 hover:text-red-500" aria-label="Delete document"><Trash2 size={17} /></button>
+              </Rise>
             ))}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -253,7 +266,7 @@ function KnowledgeEditor() {
               <div key={r.id} className="rounded-xl border border-line px-4 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm text-ink-500 truncate">{PLATFORM_LABEL[r.platform] || r.platform} · {r.destination} · from {r.from}</div>
-                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${r.replied ? "bg-emerald-50 text-emerald-700" : "bg-ink-100 text-ink-500"}`}>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${r.replied ? "bg-emerald-50 text-emerald-700" : "bg-surface text-ink-500"}`}>
                     {r.replied ? "Replied" : "Skipped"}
                   </span>
                 </div>

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api } from "./api";
+import { clearSticky } from "./sticky";
 
 export type SubStatus = "none" | "trialing" | "trial_expired" | "active" | "past_due" | "canceled" | "incomplete";
 
@@ -40,8 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function refresh() {
     try {
-      const { user } = await api<{ user: User }>("/auth/me");
-      setUser(user);
+      const { user } = await api<{ user: User | null }>("/auth/me"); // null = not signed in
+      setUser((prev) => {
+        if (prev && prev.id !== user?.id) clearSticky(); // signed out or different account: forget cached tab data
+        return user;
+      });
     } catch {
       setUser(null);
     } finally {
@@ -55,10 +59,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout() {
     await api("/auth/logout", { method: "POST" }).catch(() => undefined);
+    clearSticky(); // never show this account's cached data to the next person
     setUser(null);
   }
 
-  return <AuthCtx.Provider value={{ user, loading, setUser, refresh, logout }}>{children}</AuthCtx.Provider>;
+  // Any account change (sign-in as someone else, sign-out) wipes cached tab data.
+  const setUserSafe = (u: User | null) => {
+    setUser((prev) => {
+      if (!u || (prev && prev.id !== u.id)) clearSticky();
+      return u;
+    });
+  };
+
+  return <AuthCtx.Provider value={{ user, loading, setUser: setUserSafe, refresh, logout }}>{children}</AuthCtx.Provider>;
 }
 
 export const useAuth = () => useContext(AuthCtx);

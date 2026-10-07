@@ -3,6 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { api } from "../../lib/api";
 import { Logo } from "../../components/Logo";
+import { motion, AnimatePresence } from "motion/react";
+import { Rise, Dialog, Pop, SkeletonRows, SPRING, EASE_OUT } from "../../components/motion";
+import { useStickyState, peekSticky, putSticky } from "../../lib/sticky";
 import { Plus, Send, Trash2, Check, MessageSquare, X, MoreVertical, Pencil, AlertTriangle } from "lucide-react";
 
 interface Step {
@@ -34,7 +37,9 @@ const PLATFORM_LABEL: Record<string, string> = { whatsapp: "WhatsApp", telegram:
 export default function Chat() {
   const { chatId } = useParams();
   const nav = useNavigate();
-  const [chats, setChats] = useState<ChatSummary[]>([]);
+  // Remembered across tab switches → the list is there instantly when you come back.
+  const [chats, setChats, chatsCached] = useStickyState<ChatSummary[]>("chats", []);
+  const [chatsLoaded, setChatsLoaded] = useState(chatsCached);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,6 +58,7 @@ export default function Chat() {
   const loadChats = async () => {
     const { chats } = await api<{ chats: ChatSummary[] }>("/chats");
     setChats(chats);
+    setChatsLoaded(true);
   };
 
   useEffect(() => {
@@ -65,8 +71,11 @@ export default function Chat() {
       return;
     }
     if (chatId === streamingRef.current) return; // don't clobber an in-flight stream
+    const cached = peekSticky<Msg[]>(`msgs:${chatId}`);
+    if (cached) setMessages(cached);
     api<{ messages: Msg[] }>(`/chats/${chatId}`)
       .then(({ messages }) => {
+        putSticky(`msgs:${chatId}`, messages);
         setMessages(messages);
         seedResolved(messages);
       })
@@ -284,12 +293,17 @@ export default function Chat() {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
-          {chats.length === 0 && <p className="text-sm text-ink-400 px-3 py-4">No conversations yet.</p>}
-          {chats.map((c) => {
+          {!chatsLoaded && <div className="px-1 pt-1"><SkeletonRows rows={5} className="h-11" /></div>}
+          {chatsLoaded && chats.length === 0 && (
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-ink-400 px-3 py-4">No conversations yet.</motion.p>
+          )}
+          <AnimatePresence initial={!chatsCached}>
+          {chats.map((c, index) => {
             const active = c.id === chatId;
             const editing = editingId === c.id;
             return (
-              <div key={c.id} className={`group relative rounded-xl ${active ? "bg-brand-50" : "hover:bg-surface"}`}>
+              <Rise key={c.id} index={index} stagger={!chatsCached} className={`group relative rounded-xl ${active ? "" : "hover:bg-surface"}`}>
+                {active && <motion.div layoutId="chat-pill" className="absolute inset-0 rounded-xl bg-brand-50" transition={SPRING} />}
                 {editing ? (
                   <div className="px-2 py-1.5">
                     <input
@@ -305,7 +319,7 @@ export default function Chat() {
                     />
                   </div>
                 ) : (
-                  <div className="flex items-start gap-2.5 px-3 py-2.5 cursor-pointer" onClick={() => nav(`/app/chat/${c.id}`)}>
+                  <div className="relative flex items-start gap-2.5 px-3 py-2.5 cursor-pointer" onClick={() => nav(`/app/chat/${c.id}`)}>
                     <MessageSquare size={16} className={`mt-0.5 shrink-0 ${active ? "text-brand-600" : "text-ink-400"}`} />
                     <div className="min-w-0 flex-1">
                       <div className={`truncate text-sm font-semibold ${active ? "text-brand-700" : "text-ink-800"}`}>{c.title}</div>
@@ -324,10 +338,8 @@ export default function Chat() {
                   </div>
                 )}
 
-                {menuId === c.id && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setMenuId(null)} />
-                    <div className="absolute right-2 top-10 z-20 w-40 rounded-xl border border-line bg-white shadow-pop p-1">
+                {menuId === c.id && <div className="fixed inset-0 z-10" onClick={() => setMenuId(null)} />}
+                <Pop open={menuId === c.id} className="absolute right-2 top-10 z-20 w-40 rounded-xl border border-line bg-white shadow-pop p-1">
                       <button
                         onClick={() => startRename(c)}
                         className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-ink-700 hover:bg-surface"
@@ -343,19 +355,18 @@ export default function Chat() {
                       >
                         <Trash2 size={15} /> Delete
                       </button>
-                    </div>
-                  </>
-                )}
-              </div>
+                </Pop>
+              </Rise>
             );
           })}
+          </AnimatePresence>
         </div>
       </div>
 
       {/* Delete confirmation */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 bg-ink-900/40 grid place-items-center p-4" onClick={() => setConfirmDelete(null)}>
-          <div className="card w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
+      <Dialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)}>
+        {confirmDelete && (
+          <div className="card w-full max-w-sm p-6">
             <div className="flex items-center gap-3">
               <span className="grid place-items-center h-11 w-11 rounded-full bg-red-50 text-red-600 shrink-0">
                 <AlertTriangle size={20} />
@@ -371,30 +382,33 @@ export default function Chat() {
               <button onClick={() => deleteChat(confirmDelete.id)} className="btn-danger">Delete</button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Dialog>
 
       {/* Conversation */}
       <div className="flex-1 min-w-0 flex flex-col bg-white">
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-5 py-8">
             {messages.length === 0 && (
-              <div className="mt-20 text-center">
+              <motion.div className="mt-20 text-center" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE_OUT }}>
                 <span className="inline-block"><Logo size={48} showText={false} /></span>
                 <h2 className="mt-5 text-2xl font-semibold text-ink-900">What should we do across your channels?</h2>
                 <p className="mt-2 text-ink-500">Ask about recent messages, or say “send this to all my channels”.</p>
                 <div className="mt-6 flex flex-wrap gap-2 justify-center">
                   {["Summarize what's been said on WhatsApp today", "Which channels am I connected to?", "Send 'We're open!' to all my channels"].map((p) => (
-                    <button key={p} onClick={() => setInput(p)} className="text-sm rounded-full border border-line px-3.5 py-2 text-ink-600 hover:bg-surface">
+                    <button key={p} onClick={() => setInput(p)} className="text-sm rounded-full border border-line px-3.5 py-2 text-ink-600 transition-[background-color,border-color,transform] duration-150 hover:bg-surface hover:border-line-strong active:scale-[0.97]">
                       {p}
                     </button>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             )}
 
             <div className="space-y-6">
+              {/* Existing messages appear instantly; new ones rise in as they arrive. */}
+              <AnimatePresence initial={false}>
               {messages.map((m, idx) => (
+                <motion.div key={m.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25, ease: EASE_OUT }}>
                 <MessageView
                   key={m.id}
                   msg={m}
@@ -404,7 +418,9 @@ export default function Chat() {
                   onApproveSchedule={approveSchedule}
                   onApproveMonitor={approveMonitor}
                 />
+                </motion.div>
               ))}
+              </AnimatePresence>
             </div>
           </div>
         </div>

@@ -12,6 +12,7 @@ import { createSession, destroyAllSessions, destroySession } from "../auth/sessi
 import {
   SESSION_COOKIE,
   clearSessionCookie,
+  loadUser,
   requireAuth,
   setSessionCookie,
 } from "../auth/context";
@@ -215,10 +216,12 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.send({ status: "password_reset" });
   });
 
-  app.get("/me", { preHandler: requireAuth }, async (req, reply) => {
-    const user = await users().findOne({ _id: req.userId! });
-    if (!user) return reply.code(401).send({ error: "unauthorized" });
-    return reply.send({ user: publicUser(user) });
+  // "Who is signed in?" — a normal answer for visitors too ({ user: null }), so public pages
+  // don't log a 401 error in every visitor's browser console.
+  app.get("/me", async (req, reply) => {
+    const userId = await loadUser(req);
+    const user = userId ? await users().findOne({ _id: userId }) : null;
+    return reply.send({ user: user ? publicUser(user) : null });
   });
 
   app.patch("/profile", { preHandler: requireAuth }, async (req, reply) => {

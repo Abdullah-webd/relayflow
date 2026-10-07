@@ -8,7 +8,8 @@ RelayFlow (https://userelayflow.com) is live with real users. Fastify + React/Vi
 Nothing reaches production without passing all four stages. If any stage fails, stop and fix it — or revert.
 
 ### 1. Test locally before pushing
-- `npm run verify` must pass: typecheck → build → `npm test` (the full harness) → `npm run test:visual`.
+- `npm run verify` must pass: typecheck → build → `npm test` (the full harness) → `npm run test:visual` →
+  `npm run test:e2e` (Playwright critical flows in `e2e/`). See `VERIFY.md` for the full map.
 - Changes to the agent, monitors, auto-replies or AI prompts: also run `npm run test:ai` (uses the real model).
 - UI changes: open the screenshots in `test-results/visual/` and look at them (desktop + phone) before pushing.
 - New behavior needs new checks in `scripts/test/suites/` — the harness must cover what you changed.

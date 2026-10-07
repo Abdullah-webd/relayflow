@@ -1,6 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../lib/api";
+import { motion } from "motion/react";
+import { Rise } from "../../components/motion";
+import { useStickyState } from "../../lib/sticky";
+import { ChannelMark, type Channel } from "../../components/ChannelMark";
 import { Check, X, RefreshCw, Plug } from "lucide-react";
 
 interface ConnView {
@@ -19,8 +23,8 @@ interface Dest {
 }
 
 const PLATFORMS = [
-  { key: "whatsapp", name: "WhatsApp", color: "#25D366", copy: "Scan a QR from WhatsApp → Linked devices. Reads your group messages." },
-  { key: "telegram", name: "Telegram", color: "#229ED9", copy: "Sign in with your phone number. Groups and channels." },
+  { key: "whatsapp", name: "WhatsApp", color: "#25D366", copy: "Scan a QR from WhatsApp → Linked devices. Reads your groups and private chats." },
+  { key: "telegram", name: "Telegram", color: "#229ED9", copy: "Sign in with your phone number. Groups, channels and private chats." },
   { key: "slack", name: "Slack", color: "#611f69", copy: "Authorize with Slack. Your channels and messages." },
 ];
 
@@ -29,14 +33,20 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   connecting: { label: "Connecting…", cls: "bg-amber-50 text-amber-700" },
   qr: { label: "Scan QR", cls: "bg-amber-50 text-amber-700" },
   pending: { label: "Finish sign-in", cls: "bg-amber-50 text-amber-700" },
-  disconnected: { label: "Disconnected", cls: "bg-ink-100 text-ink-600" },
+  disconnected: { label: "Disconnected", cls: "bg-surface text-ink-600" },
   error: { label: "Error", cls: "bg-red-50 text-red-600" },
 };
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 bg-ink-900/40 grid place-items-center p-4" onClick={onClose}>
-      <div className="card w-full max-w-md p-0 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+    <motion.div className="fixed inset-0 z-50 bg-ink-900/40 grid place-items-center p-4" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+      <motion.div
+        className="card w-full max-w-md p-0 overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.96, y: 6 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b border-line">
           <h3 className="font-semibold text-ink-900">{title}</h3>
           <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
@@ -44,13 +54,13 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
           </button>
         </div>
         <div className="p-5">{children}</div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
 export default function Connections() {
-  const [conns, setConns] = useState<ConnView[]>([]);
+  const [conns, setConns, connsCached] = useStickyState<ConnView[]>("connections", []);
   const [params, setParams] = useSearchParams();
   const [modal, setModal] = useState<ReactNode>(null);
 
@@ -99,14 +109,14 @@ export default function Connections() {
         <div className="mt-6 grid sm:grid-cols-2 gap-4">
           {PLATFORMS.map((p) => {
             const conn = byPlatform(p.key);
-            const status = conn ? STATUS[conn.status] || { label: conn.status, cls: "bg-ink-100 text-ink-600" } : null;
+            const status = conn ? STATUS[conn.status] || { label: conn.status, cls: "bg-surface text-ink-600" } : null;
             const isConnected = conn?.status === "connected";
             const needsReconnect = conn && (conn.status === "disconnected" || conn.status === "error");
             return (
-              <div key={p.key} className="card p-5 flex flex-col">
+              <Rise key={p.key} index={PLATFORMS.indexOf(p)} stagger={!connsCached} className="card p-5 flex flex-col transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
                 <div className="flex items-center gap-3">
-                  <span className="h-11 w-11 rounded-xl grid place-items-center text-white font-semibold" style={{ background: p.color }}>
-                    {p.name.slice(0, 2)}
+                  <span className="h-11 w-11 rounded-xl grid place-items-center text-white" style={{ background: p.color }}>
+                    <ChannelMark channel={p.key as Channel} size={22} />
                   </span>
                   <div className="flex-1">
                     <div className="font-semibold text-ink-900">{p.name}</div>
@@ -136,7 +146,7 @@ export default function Connections() {
                     </button>
                   )}
                 </div>
-              </div>
+              </Rise>
             );
           })}
         </div>

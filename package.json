@@ -18,7 +18,8 @@
     "test:ai": "TEST_AI=1 tsx scripts/test/run.ts",
     "test:visual": "tsx scripts/test/visual.ts",
     "smoke:live": "tsx scripts/test/smoke-live.ts",
-    "verify": "npm run typecheck && npm run build && npm test && npm run test:visual"
+    "verify": "npm run typecheck && npm run build && npm test && npm run test:visual && npm run test:e2e",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -33,6 +34,7 @@
     "googleapis": "^144.0.0",
     "lucide-react": "^0.469.0",
     "mongodb": "^6.17.0",
+    "motion": "^14.0.0",
     "node-cron": "^3.0.3",
     "openai": "^4.77.0",
     "pdf-parse": "^2.4.5",
@@ -48,6 +50,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.10.0",
     "@types/node-cron": "^3.0.11",
@@ -57,6 +60,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.0",
+    "playwright": "^1.64.0",
     "postcss": "^8.4.49",
     "puppeteer-core": "^23.11.1",
     "tailwindcss": "^3.4.16",

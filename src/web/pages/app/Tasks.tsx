@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
 import { Link } from "react-router-dom";
+import { AnimatePresence } from "motion/react";
+import { Rise, SkeletonRows } from "../../components/motion";
+import { useStickyState } from "../../lib/sticky";
 import { Clock, Trash2, Plus, Eye } from "lucide-react";
 
 interface Task {
@@ -29,15 +32,19 @@ interface Monitor {
 const PLATFORM_LABEL: Record<string, string> = { whatsapp: "WhatsApp", telegram: "Telegram", slack: "Slack", gmail: "Gmail" };
 
 export default function Tasks() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [monitors, setMonitors] = useState<Monitor[]>([]);
+  const [tasks, setTasks, tasksCached] = useStickyState<Task[]>("tasks", []);
+  const [monitors, setMonitors, monitorsCached] = useStickyState<Monitor[]>("monitors", []);
+  const [loaded, setLoaded] = useState(tasksCached);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: "", instruction: "", schedule: "daily", runAt: "" });
   const [err, setErr] = useState<string | null>(null);
   // Page-level notice (e.g. a Starter plan limit when re-activating a paused item).
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = async () => setTasks((await api<{ tasks: Task[] }>("/tasks")).tasks);
+  const load = async () => {
+    setTasks((await api<{ tasks: Task[] }>("/tasks")).tasks);
+    setLoaded(true);
+  };
   const loadMonitors = async () => setMonitors((await api<{ monitors: Monitor[] }>("/monitors")).monitors);
   useEffect(() => {
     load();
@@ -142,9 +149,11 @@ export default function Tasks() {
         )}
 
         <div className="mt-6 space-y-3">
-          {tasks.length === 0 && <p className="text-ink-400 py-8 text-center">No scheduled tasks yet.</p>}
-          {tasks.map((t) => (
-            <div key={t.id} className="card p-4 flex items-center gap-4">
+          {!loaded && <SkeletonRows rows={3} className="h-[76px]" />}
+          {loaded && tasks.length === 0 && <p className="text-ink-400 py-8 text-center">No scheduled tasks yet.</p>}
+          <AnimatePresence initial={!tasksCached}>
+          {tasks.map((t, index) => (
+            <Rise key={t.id} index={index} stagger={!tasksCached} className="card p-4 flex items-center gap-4">
               <span className="grid place-items-center h-10 w-10 rounded-xl bg-brand-50 text-brand-600 shrink-0">
                 <Clock size={18} />
               </span>
@@ -156,26 +165,28 @@ export default function Tasks() {
                   {t.lastRunAt && ` · last ran ${new Date(t.lastRunAt).toLocaleString()}`}
                 </div>
               </div>
-              <button onClick={() => toggle(t)} className={`text-xs font-semibold px-2.5 py-1 rounded-full ${t.active ? "bg-emerald-50 text-emerald-700" : "bg-ink-100 text-ink-500"}`}>
+              <button onClick={() => toggle(t)} className={`text-xs font-semibold px-2.5 py-1 rounded-full ${t.active ? "bg-emerald-50 text-emerald-700" : "bg-surface text-ink-500"}`}>
                 {t.active ? "Active" : "Paused"}
               </button>
-              <button onClick={() => remove(t.id)} className="text-ink-400 hover:text-red-500">
+              <button onClick={() => remove(t.id)} className="text-ink-400 hover:text-red-500" aria-label="Delete task">
                 <Trash2 size={17} />
               </button>
-            </div>
+            </Rise>
           ))}
+          </AnimatePresence>
         </div>
 
         {/* Monitors */}
         <div className="mt-10">
           <h2 className="text-xl font-semibold text-ink-900">Monitors</h2>
           <p className="mt-1 text-ink-500">
-            Ask the agent to “let me know when someone asks about X on WhatsApp” — it checks on an interval and emails you only when it matches.
+            Ask the agent to “let me know when someone asks about X on WhatsApp” — it checks each new message as it arrives and emails you within seconds when it matches.
           </p>
           <div className="mt-4 space-y-3">
             {monitors.length === 0 && <p className="text-ink-400 py-6 text-center">No monitors yet. Set one up from chat.</p>}
-            {monitors.map((m) => (
-              <div key={m.id} className="card p-4 flex items-center gap-4">
+            <AnimatePresence initial={!monitorsCached}>
+            {monitors.map((m, index) => (
+              <Rise key={m.id} index={index} stagger={!monitorsCached} className="card p-4 flex items-center gap-4">
                 <span className="grid place-items-center h-10 w-10 rounded-xl bg-accent-400/10 text-accent-600 shrink-0">
                   <Eye size={18} />
                 </span>
@@ -193,15 +204,16 @@ export default function Tasks() {
                 </div>
                 <button
                   onClick={() => toggleMonitor(m)}
-                  className={`text-xs font-semibold px-2.5 py-1 rounded-full ${m.active ? "bg-emerald-50 text-emerald-700" : "bg-ink-100 text-ink-500"}`}
+                  className={`text-xs font-semibold px-2.5 py-1 rounded-full ${m.active ? "bg-emerald-50 text-emerald-700" : "bg-surface text-ink-500"}`}
                 >
                   {m.active ? "Active" : "Paused"}
                 </button>
-                <button onClick={() => removeMonitor(m.id)} className="text-ink-400 hover:text-red-500">
+                <button onClick={() => removeMonitor(m.id)} className="text-ink-400 hover:text-red-500" aria-label="Delete monitor">
                   <Trash2 size={17} />
                 </button>
-              </div>
+              </Rise>
             ))}
+            </AnimatePresence>
           </div>
         </div>
       </div>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, Link, useLocation } from "react-router-dom";
+import { motion } from "motion/react";
+import { EASE_OUT, SPRING } from "../../components/motion";
 import { Logo } from "../../components/Logo";
 import { useAuth } from "../../lib/auth";
 
@@ -68,6 +70,8 @@ const items = [
 ];
 
 export default function AppLayout() {
+  // Top-level section ("chat", "connections", …) — switching chats inside Chat doesn't re-animate the page.
+  const section = useLocation().pathname.split("/")[2] || "chat";
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const [collapsed, setCollapsed] = useState(() => {
@@ -94,7 +98,7 @@ export default function AppLayout() {
   // On mobile the drawer is always full-label; collapse only applies on desktop (md+).
   const compact = collapsed;
 
-  const sidebar = (
+  const sidebar = (variant: "desk" | "mobile") => (
     <aside
       className={`${compact ? "md:w-[72px]" : "md:w-60"} w-64 h-full shrink-0 bg-white border-r border-line flex flex-col transition-[width] duration-200`}
     >
@@ -127,13 +131,19 @@ export default function AppLayout() {
             title={n.label}
             onClick={() => setMobileOpen(false)}
             className={({ isActive }) =>
-              `flex items-center gap-2.5 h-9 rounded-lg text-[14px] font-medium transition-colors duration-150 ${compact ? "md:justify-center md:px-0 px-3" : "px-3"} ${
-                isActive ? "bg-brand-50 text-brand-700" : "text-ink-600 hover:bg-surface hover:text-ink-900"
+              `relative flex items-center gap-2.5 h-9 rounded-lg text-[14px] font-medium transition-colors duration-150 ${compact ? "md:justify-center md:px-0 px-3" : "px-3"} ${
+                isActive ? "text-brand-700" : "text-ink-600 hover:bg-surface hover:text-ink-900"
               }`
             }
           >
-            <n.icon size={18} strokeWidth={1.75} className="shrink-0 opacity-80" />
-            <span className={compact ? "md:hidden" : ""}>{n.label}</span>
+            {({ isActive }) => (
+              <>
+                {/* One highlight that slides to the active tab. */}
+                {isActive && <motion.span layoutId={`nav-pill-${variant}`} className="absolute inset-0 rounded-lg bg-brand-50" transition={SPRING} />}
+                <n.icon size={18} strokeWidth={1.75} className="relative shrink-0 opacity-80" />
+                <span className={`relative ${compact ? "md:hidden" : ""}`}>{n.label}</span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
@@ -190,13 +200,13 @@ export default function AppLayout() {
   return (
     <div className="h-full flex bg-white">
       {/* Desktop sidebar */}
-      <div className="hidden md:flex h-full">{sidebar}</div>
+      <div className="hidden md:flex h-full">{sidebar("desk")}</div>
 
       {/* Mobile drawer */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-40 flex">
           <div className="absolute inset-0 bg-ink-900/40" onClick={() => setMobileOpen(false)} />
-          <div className="relative z-50 h-full">{sidebar}</div>
+          <div className="relative z-50 h-full">{sidebar("mobile")}</div>
         </div>
       )}
 
@@ -210,7 +220,16 @@ export default function AppLayout() {
         </div>
         <TrialBar />
         <main className="flex-1 min-w-0 overflow-hidden">
-          <Outlet />
+          {/* Tab switch: the new page lifts in (no exit wait, so switching never feels slow). */}
+          <motion.div
+            key={section}
+            className="h-full"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2, ease: EASE_OUT }}
+          >
+            <Outlet />
+          </motion.div>
         </main>
       </div>
     </div>

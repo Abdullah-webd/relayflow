@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck, build, tests, visual
+    name: Typecheck, build, tests, visual, e2e
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -39,6 +39,8 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run test:visual
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - name: Upload visual screenshots
         if: always()
         uses: actions/upload-artifact@v4

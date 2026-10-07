@@ -4,6 +4,8 @@ import { suite, check, api } from "../kit";
 
 export default async function auth() {
   suite("Sign-up, consent & free trial");
+  const visitor = await api("/api/auth/me");
+  check("visitors get a normal 'not signed in' answer (no 401 noise)", visitor.status === 200 && visitor.body.user === null);
   const email = `signup+${Date.now()}@example.invalid`;
   let r = await api("/api/auth/signup", { method: "POST", body: JSON.stringify({ email, password: "password123" }) });
   check("sign-up without accepting the terms is rejected", r.status === 400 && /Terms of Service/.test(r.body.detail));

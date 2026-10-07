@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
 import { api } from "../../lib/api";
+import { useStickyState } from "../../lib/sticky";
 import { PRICES } from "../../lib/pricing";
 import { CreditCard, Loader2, Check, ExternalLink } from "lucide-react";
 
@@ -69,7 +70,7 @@ export default function Settings() {
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
 
-  const [billing, setBilling] = useState<BillingState | null>(null);
+  const [billing, setBilling] = useStickyState<BillingState | null>("billing", null);
   const [portalBusy, setPortalBusy] = useState(false);
 
   const [curPw, setCurPw] = useState("");
