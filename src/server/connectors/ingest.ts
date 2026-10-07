@@ -1,10 +1,11 @@
-import { destinations, type Platform } from "../db";
+import { destinations, isPersonalChat, type Platform } from "../db";
 import { uid } from "../lib/crypto";
 import { recordMessage } from "./store";
 
 /**
  * The single pipeline every channel feeds (WhatsApp, Telegram, Slack). For each message:
- *  1. make sure its chat exists as a destination (groups, channels AND private chats),
+ *  0. ignore private chats entirely: RelayFlow works with groups and channels only,
+ *  1. make sure its chat exists as a destination,
  *  2. store it (deduped by chat + message id; kept 14 days),
  *  3. if it's a NEW live message: run auto-reply (inbound only) and wake the user's monitors.
  * Backfilled history is stored but never triggers replies or alerts.
@@ -52,6 +53,7 @@ setInterval(() => {
 }, 60_000).unref?.();
 
 export async function ingestMessage(m: IngestInput): Promise<boolean> {
+  if (isPersonalChat({ platform: m.platform, kind: m.chatKind })) return false;
   const text = (m.text || "").trim();
   if (!text) return false;
   const age = Date.now() - m.occurredAt.getTime();

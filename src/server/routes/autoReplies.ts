@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { knowledgeDocs, autoReplies, connections, destinations, responders, type Responder } from "../db";
+import { knowledgeDocs, autoReplies, connections, destinations, responders, GROUPS_ONLY, type Responder } from "../db";
 import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
 import { ensureLegacyResponder, getResponderContext, syncResponderDestinations } from "../knowledge/knowledge";
@@ -52,7 +52,7 @@ export async function autoReplyRoutes(app: FastifyInstance) {
 
     const channels = [];
     for (const c of conns) {
-      const dests = await destinations().find({ connectionId: c._id, userId }).sort({ name: 1 }).toArray();
+      const dests = await destinations().find({ connectionId: c._id, userId, ...GROUPS_ONLY }).sort({ name: 1 }).toArray();
       channels.push({
         connectionId: c._id,
         platform: c.platform,
@@ -142,7 +142,7 @@ export async function autoReplyRoutes(app: FastifyInstance) {
     let destinationIds = r.destinationIds;
     if (body.destinationIds) {
       const unique = [...new Set(body.destinationIds)];
-      const owned = await destinations().find({ _id: { $in: unique }, userId }).project({ _id: 1 }).toArray();
+      const owned = await destinations().find({ _id: { $in: unique }, userId, ...GROUPS_ONLY }).project({ _id: 1 }).toArray();
       destinationIds = owned.map((d) => d._id);
       set.destinationIds = destinationIds;
     }

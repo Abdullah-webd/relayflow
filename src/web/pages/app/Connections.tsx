@@ -23,9 +23,9 @@ interface Dest {
 }
 
 const PLATFORMS = [
-  { key: "whatsapp", name: "WhatsApp", copy: "Link with a QR code, like WhatsApp Web. Reads your groups and private chats." },
-  { key: "telegram", name: "Telegram", copy: "Sign in with your phone number. Groups, channels and private chats." },
-  { key: "slack", name: "Slack", copy: "Authorize with Slack. Your channels and direct messages." },
+  { key: "whatsapp", name: "WhatsApp", copy: "Link with a QR code, like WhatsApp Web. Works with your groups only, never private chats." },
+  { key: "telegram", name: "Telegram", copy: "Sign in with your phone number. Works with your groups and channels, never private chats." },
+  { key: "slack", name: "Slack", copy: "Authorize with Slack. Works with your channels, never direct messages." },
 ];
 
 const STATUS: Record<string, { label: string; tone: Tone }> = {
@@ -106,7 +106,7 @@ export default function Connections() {
 
   return (
     <Page width="max-w-[960px]">
-      <PageHeader title="Connections" description="Connect each channel once. RelayFlow reads recent messages in the chats you choose, and only sends when you approve (or when an auto-reply you turned on answers)." />
+      <PageHeader title="Connections" description="Connect each channel once. RelayFlow works with your groups and channels only (never private chats). It reads recent messages in the groups you choose, and only sends when you approve, or when an auto-reply you turned on answers." />
 
       <AnimatePresence>
         {banner && (
@@ -134,7 +134,7 @@ export default function Connections() {
                   {status && <Badge tone={status.tone} dot>{status.label}</Badge>}
                 </div>
                 <p className="mt-0.5 text-[13.5px] text-ink-500">
-                  {isConnected ? `${conn!.displayName}, ${conn!.selectedCount} chat${conn!.selectedCount === 1 ? "" : "s"} in scope` : conn?.status === "error" && conn.lastError ? conn.lastError : p.copy}
+                  {isConnected ? `${conn!.displayName}, ${conn!.selectedCount} group${conn!.selectedCount === 1 ? "" : "s"} chosen` : conn?.status === "error" && conn.lastError ? conn.lastError : p.copy}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -145,7 +145,7 @@ export default function Connections() {
                 ) : isConnected ? (
                   <>
                     <button onClick={() => setModal(<DestinationsModal conn={conn!} onClose={() => { setModal(null); load(); }} />)} className="btn-ghost h-9">
-                      <ListChecks size={15} /> Choose chats
+                      <ListChecks size={15} /> Choose groups
                     </button>
                     <button onClick={() => setConfirm(conn!)} className="btn-danger h-9">Disconnect</button>
                   </>
@@ -257,7 +257,7 @@ function WhatsAppModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
           </div>
-          <p className="text-xs text-ink-400 mt-2 text-center">You choose which chats RelayFlow reads afterwards. Keep this open until it connects.</p>
+          <p className="text-xs text-ink-400 mt-2 text-center">RelayFlow only reads your groups, never private chats. Keep this open until it connects.</p>
         </>
       )}
     </Modal>
@@ -343,11 +343,11 @@ function DestinationsModal({ conn, onClose }: { conn: ConnView; onClose: () => v
   }
 
   return (
-    <Modal title={`Chats RelayFlow reads (${conn.displayName})`} onClose={onClose}>
-      <p className="mb-3 text-[13.5px] text-ink-500">Pick which chats RelayFlow should read. Unticked chats are ignored completely.</p>
+    <Modal title={`Groups RelayFlow reads (${conn.displayName})`} onClose={onClose}>
+      <p className="mb-3 text-[13.5px] text-ink-500">Pick which groups RelayFlow should read. Unticked groups are ignored completely. Private chats are never read.</p>
       <div className="relative mb-2">
         <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats" className="input h-9 pl-9" aria-label="Search chats" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search groups" className="input h-9 pl-9" aria-label="Search groups" />
       </div>
       <div className="max-h-72 overflow-y-auto space-y-0.5">
         {dests.length === 0 && <p className="text-sm text-ink-400 py-4">No channels found yet. They appear shortly after connecting.</p>}
@@ -360,11 +360,11 @@ function DestinationsModal({ conn, onClose }: { conn: ConnView; onClose: () => v
               className="h-4 w-4 accent-brand-600"
             />
             <span className="flex-1 text-[15px] text-ink-800 truncate">{d.name}</span>
-            <span className="text-xs text-ink-400">{d.kind === "dm" ? "Private chat" : d.kind === "channel" ? "Channel" : "Group"}</span>
+            <span className="text-xs text-ink-400">{d.kind === "channel" ? "Channel" : "Group"}</span>
           </label>
         ))}
       </div>
-      <button onClick={save} disabled={busy} className="btn-primary w-full mt-4">{busy ? "Saving…" : "Save chats"}</button>
+      <button onClick={save} disabled={busy} className="btn-primary w-full mt-4">{busy ? "Saving…" : "Save groups"}</button>
     </Modal>
   );
 }

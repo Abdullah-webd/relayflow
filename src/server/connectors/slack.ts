@@ -121,8 +121,7 @@ export async function syncSlack(connectionId: string): Promise<void> {
     const oldestMs = Math.max(Date.now() - 14 * 24 * 60 * 60 * 1000, conn.syncedAt ? conn.syncedAt.getTime() - 120_000 : 0);
     const startedAt = new Date();
 
-    // Connections authorized before private-message access was added lack im/mpim scopes:
-    // fall back to channels only (reconnecting Slack grants the rest).
+    // Channels only: RelayFlow never reads Slack direct messages or group DMs.
     const listConversations = async (types: string): Promise<any[]> => {
       let cursor: string | undefined;
       const out: any[] = [];
@@ -133,13 +132,7 @@ export async function syncSlack(connectionId: string): Promise<void> {
       } while (cursor);
       return out;
     };
-    let convs: any[];
-    try {
-      convs = await listConversations("public_channel,private_channel,im,mpim");
-    } catch (e) {
-      if ((e as any)?.data?.error !== "missing_scope") throw e;
-      convs = await listConversations("public_channel,private_channel");
-    }
+    const convs = await listConversations("public_channel,private_channel");
 
     for (const conv of convs) {
       const name = await convName(slack, connectionId, conv);

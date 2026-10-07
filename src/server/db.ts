@@ -1,4 +1,4 @@
-import { MongoClient, type Db, type Collection, type ObjectId } from "mongodb";
+import { MongoClient, type Db, type Collection, type Filter, type ObjectId } from "mongodb";
 import { env } from "./env";
 
 // ---------- Document types ----------
@@ -110,6 +110,11 @@ export interface Connection {
   createdAt: Date;
   updatedAt: Date;
 }
+
+// RelayFlow works with groups and channels only, never private chats: WhatsApp/Telegram
+// one-to-one chats ("dm") and Slack direct/group DMs are ignored everywhere.
+export const isPersonalChat = (d: { platform?: string; kind?: string | null }) => d.kind === "dm" || (d.platform === "slack" && d.kind === "group");
+export const GROUPS_ONLY: Filter<Destination> = { $nor: [{ kind: "dm" }, { platform: "slack" as Platform, kind: "group" }] };
 
 export interface Destination {
   _id: string;

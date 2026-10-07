@@ -444,7 +444,7 @@ export default function Chat() {
               <motion.div className="mt-[8vh]" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE_OUT }}>
                 <Logo size={36} showText={false} />
                 <h2 className="mt-5 font-display text-[28px] font-semibold leading-tight tracking-[-0.02em] text-navy">What should we do across your channels?</h2>
-                <p className="mt-2 text-[15px] text-ink-500">RelayFlow reads your WhatsApp, Telegram and Slack chats. Ask what happened, send to any group, or set something up. Nothing is sent without your approval.</p>
+                <p className="mt-2 text-[15px] text-ink-500">RelayFlow reads your WhatsApp, Telegram and Slack groups. Ask what happened, send to any group, or set something up. Nothing is sent without your approval.</p>
                 <div className="mt-7 grid gap-2 sm:grid-cols-2">
                   {[
                     { icon: Sparkles, t: "Summarize what's been said on WhatsApp today" },

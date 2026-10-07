@@ -1,4 +1,4 @@
-import { channelMessages, connections, destinations, outbound, type Connection, type Platform } from "../db";
+import { channelMessages, connections, destinations, outbound, isPersonalChat, GROUPS_ONLY, type Connection, type Platform } from "../db";
 import { uid } from "../lib/crypto";
 import * as wa from "./whatsapp";
 import * as tg from "./telegram";
@@ -7,16 +7,26 @@ import * as gmail from "./gmail";
 import { messageKey, noteOwnSend } from "./ingest";
 
 // Forgiving group matcher: ignores case, spaces, punctuation and emoji so
-// "Study Master", "studymaster", "STUDYMASTER 📚" all match the same group.
-const normalizeName = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-function matchByGroup<T extends { externalId: string; name: string }>(dests: T[], group: string): T[] {
+// "Study Master", "studymaster", "STUDYMASTER 📚" all match the same group (any script, not just a-z).
+const normalizeName = (s: string) => (s || "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+/**
+ * Find chats by name, strictest first: exact id → same name → name contains what was asked
+ * (3+ characters) → what was asked contains the chat's whole name (only substantial names).
+ * The tiers stop at the first hit, so a fuzzy match never rides along with an exact one, and a
+ * short name like "E" can never match just because the request contains that letter.
+ */
+export function matchByGroup<T extends { externalId: string; name: string }>(dests: T[], group: string): T[] {
   const exact = dests.filter((d) => d.externalId === group);
   if (exact.length) return exact;
   const q = normalizeName(group);
   if (!q) return [];
+  const same = dests.filter((d) => normalizeName(d.name) === q);
+  if (same.length) return same;
+  const contains = q.length >= 3 ? dests.filter((d) => normalizeName(d.name).includes(q)) : [];
+  if (contains.length) return contains;
   return dests.filter((d) => {
     const n = normalizeName(d.name);
-    return n.length > 0 && (n === q || n.includes(q) || q.includes(n));
+    return n.length >= 4 && n.length * 2 >= q.length && q.includes(n);
   });
 }
 
@@ -61,7 +71,7 @@ export async function listUserConnections(userId: string): Promise<ConnectionVie
   const rows = await connections().find({ userId }).sort({ platform: 1 }).toArray();
   const views: ConnectionView[] = [];
   for (const row of rows) {
-    const selectedCount = await destinations().countDocuments({ connectionId: row._id, selected: { $ne: false } });
+    const selectedCount = await destinations().countDocuments({ connectionId: row._id, selected: { $ne: false }, ...GROUPS_ONLY });
     views.push({
       id: row._id,
       platform: row.platform,
@@ -96,7 +106,8 @@ export async function getRecentMessages(
 
   for (const conn of conns) {
     try {
-      const dests = await destinations().find({ connectionId: conn._id }).toArray();
+      const all = await destinations().find({ connectionId: conn._id }).toArray();
+      const dests = all.filter((d) => !isPersonalChat(d)); // groups and channels only
       const nameById = new Map(dests.map((d) => [d.externalId, d.name]));
       const msgQuery: Record<string, unknown> = { connectionId: conn._id };
       if (opts.group?.trim()) {
@@ -104,7 +115,8 @@ export async function getRecentMessages(
         if (!matched.length) continue;
         msgQuery.destinationId = { $in: matched.map((d) => d.externalId) };
       } else {
-        const excluded = dests.filter((d) => d.selected === false).map((d) => d.externalId);
+        // Leave out chats the user excluded, and any private chat stored before groups-only.
+        const excluded = all.filter((d) => d.selected === false || isPersonalChat(d)).map((d) => d.externalId);
         if (excluded.length) msgQuery.destinationId = { $nin: excluded };
       }
       const msgs = await channelMessages().find(msgQuery).sort({ occurredAt: -1 }).limit(limit).toArray();
@@ -142,13 +154,13 @@ export async function getRecentMessages(
   return results.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, limit);
 }
 
-/** Chats (groups, channels, private chats) whose name matches `group`. */
+/** Groups and channels whose name matches `group`. */
 export async function findChats(userId: string, group: string, platform?: Platform): Promise<{ name: string; platform: Platform }[]> {
   const query: Record<string, unknown> = { userId, status: "connected" };
   if (platform) query.platform = platform;
   const out: { name: string; platform: Platform }[] = [];
   for (const conn of await connections().find(query).toArray()) {
-    const dests = await destinations().find({ connectionId: conn._id }).toArray();
+    const dests = await destinations().find({ connectionId: conn._id, ...GROUPS_ONLY }).toArray();
     for (const d of matchByGroup(dests, group)) out.push({ name: d.name, platform: conn.platform });
   }
   return out;
@@ -170,7 +182,7 @@ export async function listDestinations(userId: string, platform?: Platform): Pro
   const conns = await connections().find(query).toArray();
   const out: DestinationView[] = [];
   for (const conn of conns) {
-    const dests = await destinations().find({ connectionId: conn._id }).sort({ name: 1 }).toArray();
+    const dests = await destinations().find({ connectionId: conn._id, ...GROUPS_ONLY }).sort({ name: 1 }).toArray();
     for (const d of dests) {
       out.push({ platform: conn.platform, id: d._id, externalId: d.externalId, name: d.name, kind: d.kind, selected: d.selected !== false });
     }
@@ -200,7 +212,7 @@ export async function resolveSendTargets(userId: string, platforms: string[], gr
       if (narrowed.length) pool = narrowed; // only narrow if it still yields candidates
     }
     for (const conn of pool) {
-      const dests = await destinations().find({ connectionId: conn._id }).toArray();
+      const dests = await destinations().find({ connectionId: conn._id, ...GROUPS_ONLY }).toArray();
       for (const d of matchByGroup(dests, group)) {
         targets.push({ platform: conn.platform, connectionId: conn._id, externalId: d.externalId, name: d.name });
       }
@@ -214,10 +226,8 @@ export async function resolveSendTargets(userId: string, platforms: string[], gr
   for (const p of targetPlatforms) {
     const conn = connected.find((c) => c.platform === p);
     if (!conn) continue;
-    // Broadcasts go to groups/channels only — never to private chats (those need a name).
-    const dests = (await destinations().find({ connectionId: conn._id }).toArray()).filter(
-      (d) => d.selected !== false && d.kind !== "dm",
-    );
+    // Broadcasts go to the user's chosen groups/channels.
+    const dests = await destinations().find({ connectionId: conn._id, selected: { $ne: false }, ...GROUPS_ONLY }).toArray();
     for (const d of dests) targets.push({ platform: p, connectionId: conn._id, externalId: d.externalId, name: d.name });
   }
   return targets;
@@ -262,9 +272,25 @@ async function deliverOne(userId: string, t: SendTarget, content: string): Promi
 }
 
 /** Send `content` to an explicit, already-resolved list of targets. */
+/**
+ * The one place every send goes through (approved chat sends, schedules, auto-replies).
+ * Each target must be one of this user's own known groups/channels: private chats, unknown
+ * chats and other accounts' chats are refused, and duplicates are sent once.
+ */
 export async function sendToTargets(userId: string, targets: SendTarget[], content: string): Promise<SendResult[]> {
   const results: SendResult[] = [];
-  for (const t of targets) results.push(await deliverOne(userId, t, content));
+  const seen = new Set<string>();
+  for (const t of targets) {
+    const key = `${t.connectionId}|${t.externalId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const dest = await destinations().findOne({ connectionId: t.connectionId, externalId: t.externalId, userId });
+    if (!dest || isPersonalChat(dest)) {
+      results.push({ platform: t.platform, connectionId: t.connectionId, destinationName: t.name, ok: false, error: "RelayFlow only sends to your groups and channels" });
+      continue;
+    }
+    results.push(await deliverOne(userId, { ...t, platform: dest.platform, name: dest.name }, content));
+  }
   return results;
 }
 

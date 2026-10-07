@@ -19,7 +19,7 @@ export default async function monitorsAi() {
   const any = await mk("Any new message", "any new message arrives, including ones I send myself");
   await sleep(1100);
   const t0 = Date.now();
-  await _ingestWaMessage(user._id, wa, { key: { remoteJid: "2348011111111@s.whatsapp.net", id: "P1", fromMe: false }, pushName: "Chidi", messageTimestamp: nowSec(), message: { conversation: "How much is 50 cartons?" } }, false);
+  await _ingestWaMessage(user._id, wa, { key: { remoteJid: "120363000000000111@g.us", participant: "2348011111111@s.whatsapp.net", id: "P1", fromMe: false }, pushName: "Chidi", messageTimestamp: nowSec(), message: { conversation: "How much is 50 cartons?" } }, false);
   let p: any;
   for (let i = 0; i < 45 && !String(p?.lastResult).startsWith("Matched"); i++) { await sleep(1000); p = await monitors().findOne({ _id: price }); }
   check("monitor alerts within seconds of a matching message", String(p?.lastResult).startsWith("Matched"), `${((Date.now() - t0) / 1000).toFixed(0)}s`);

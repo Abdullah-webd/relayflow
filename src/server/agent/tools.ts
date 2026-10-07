@@ -54,7 +54,7 @@ export const tools: ToolDef[] = [
   {
     name: "get_recent_messages",
     description:
-      "Read recent messages from the user's connected channels, newest first — groups, channels AND private chats. Messages the user sent themselves have sender 'You'. Use `group` to read a SPECIFIC group, channel or person by name (e.g. 'Dev Syndicate', 'Chidi'). Messages are kept for 14 days.",
+      "Read recent messages from the user's connected groups and channels (never private chats), newest first. Messages the user sent themselves have sender 'You'. Use `group` to read a SPECIFIC group or channel by name (e.g. 'Dev Syndicate'). Messages are kept for 14 days.",
     parameters: {
       type: "object",
       properties: {

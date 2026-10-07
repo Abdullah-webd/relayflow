@@ -58,7 +58,7 @@ export default function Monitors() {
     <Page width="max-w-[960px]">
       <PageHeader
         title="Monitors"
-        description="Watch your chats for something specific. RelayFlow checks each new message as it arrives and emails you within seconds when it matches."
+        description="Watch your groups for something specific. RelayFlow checks each new message as it arrives and emails you within seconds when it matches."
         actions={
           <button onClick={() => setCreating(true)} className="btn-primary">
             <Plus size={16} /> New monitor
@@ -101,7 +101,7 @@ export default function Monitors() {
                     {m.mode === "absence" ? "Alert if this hasn't happened" : "Alert when"}: “{m.condition}”
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-500">
-                    <span>{m.group ? `${PLATFORM_LABEL[m.platform]}, ${m.group}` : `All chosen ${PLATFORM_LABEL[m.platform]} chats`}</span>
+                    <span>{m.group ? `${PLATFORM_LABEL[m.platform]}, ${m.group}` : `All chosen ${PLATFORM_LABEL[m.platform]} groups`}</span>
                     {m.lastResult && (
                       <Badge tone={resultTone(m.lastResult)}>
                         <span className="max-w-[320px] truncate">{m.lastResult}</span>
@@ -226,9 +226,9 @@ function CreateMonitor({ open, onClose, onCreated }: { open: boolean; onClose: (
                 </select>
               </div>
               <div>
-                <label className="label" htmlFor="mon-group">Chat</label>
+                <label className="label" htmlFor="mon-group">Group</label>
                 <select id="mon-group" className="input" value={group} onChange={(e) => setGroup(e.target.value)}>
-                  <option value="">All chosen chats</option>
+                  <option value="">All chosen groups</option>
                   {dests.map((d) => (
                     <option key={d.id} value={d.name}>
                       {d.name}

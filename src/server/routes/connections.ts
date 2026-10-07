@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { env } from "../env";
-import { connections, destinations } from "../db";
+import { GROUPS_ONLY, connections, destinations } from "../db";
 import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
 import { listUserConnections, disconnectConnection } from "../connectors/manager";
@@ -23,7 +23,7 @@ export async function connectionRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const conn = await connections().findOne({ _id: id, userId: req.userId! });
     if (!conn) return reply.code(404).send({ error: "not_found" });
-    const rows = await destinations().find({ connectionId: id }).sort({ name: 1 }).toArray();
+    const rows = await destinations().find({ connectionId: id, ...GROUPS_ONLY }).sort({ name: 1 }).toArray();
     return { destinations: rows.map((d) => ({ id: d._id, name: d.name, kind: d.kind, selected: d.selected !== false })) };
   });
 

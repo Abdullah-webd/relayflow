@@ -90,7 +90,7 @@ export default function Overview() {
                             {c.status !== "connected" && <Badge tone={c.status === "error" ? "bad" : "warn"}>{c.status === "error" ? "Needs reconnecting" : "Finishing setup"}</Badge>}
                           </div>
                           <div className="truncate text-[12.5px] text-ink-500">
-                            {c.groups} chats, last message {ago(c.lastMessageAt)}
+                            {c.groups} groups, last message {ago(c.lastMessageAt)}
                           </div>
                         </div>
                         <div className="text-right">

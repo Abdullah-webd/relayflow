@@ -34,7 +34,7 @@ const groups: [string, string, string, string][] = [
   ["whatsapp", "shop", "Obi Foods customers", "group"],
   ["whatsapp", "wholesale", "Wholesale buyers", "group"],
   ["whatsapp", "riders", "Delivery riders", "group"],
-  ["whatsapp", "chidi", "Chidi Okafor", "dm"],
+  ["whatsapp", "vip", "VIP customers", "group"],
   ["telegram", "club", "Lekki running club", "group"],
   ["telegram", "deals", "Obi Foods deals", "channel"],
   ["slack", "ops", "#operations", "channel"],
@@ -62,7 +62,7 @@ for (let day = 6; day >= 0; day--) {
 await channelMessages().insertMany(msgs as any);
 
 await responders().insertMany([
-  { _id: "r-shop", userId: uid, name: "Shop FAQs", active: true, instructions: "Answer questions about our products, prices, opening hours and delivery.\nKeep replies short and friendly.\nNever discuss refunds or complaints. Leave those for me.", destinationIds: ["d-shop", "d-chidi"], createdAt: new Date(now - 5 * 24 * H), updatedAt: new Date() },
+  { _id: "r-shop", userId: uid, name: "Shop FAQs", active: true, instructions: "Answer questions about our products, prices, opening hours and delivery.\nKeep replies short and friendly.\nNever discuss refunds or complaints. Leave those for me.", destinationIds: ["d-shop", "d-vip"], createdAt: new Date(now - 5 * 24 * H), updatedAt: new Date() },
   { _id: "r-whole", userId: uid, name: "Wholesale orders", active: false, instructions: "Answer questions about minimum order quantities, bulk prices and pickup times.\nNever agree to discounts.", destinationIds: ["d-wholesale"], createdAt: new Date(now - 2 * 24 * H), updatedAt: new Date() },
   { _id: "r-club", userId: uid, name: "Running club info", active: true, instructions: "Answer questions about run times, routes and meeting points. Don't reply to chit-chat.", destinationIds: ["d-club"], createdAt: new Date(now - 24 * H), updatedAt: new Date() },
 ] as any);
@@ -71,8 +71,8 @@ await knowledgeDocs().insertMany([
   { _id: "k2", userId: uid, responderId: "r-shop", title: "Opening hours and location", source: "text", text: "Open Monday to Saturday, 9am to 6pm. 14 Admiralty Way, Lekki Phase 1.", chars: 380, createdAt: new Date(now - 4 * 24 * H) },
   { _id: "k3", userId: uid, responderId: "r-club", title: "Club handbook", source: "pdf", text: "Saturday runs start 6am at Lekki-Ikoyi bridge. Tuesday intervals 6:30pm.", chars: 8410, createdAt: new Date(now - 24 * H) },
 ] as any);
-await destinations().updateMany({ _id: { $in: ["d-shop", "d-chidi", "d-club"] } }, { $set: { autoReplyEnabled: true, autoReplyLastSeenAt: new Date() } });
-await destinations().updateMany({ _id: { $in: ["d-shop", "d-chidi"] } }, { $set: { responderId: "r-shop" } });
+await destinations().updateMany({ _id: { $in: ["d-shop", "d-vip", "d-club"] } }, { $set: { autoReplyEnabled: true, autoReplyLastSeenAt: new Date() } });
+await destinations().updateMany({ _id: { $in: ["d-shop", "d-vip"] } }, { $set: { responderId: "r-shop" } });
 await destinations().updateOne({ _id: "d-wholesale" }, { $set: { responderId: "r-whole" } });
 await destinations().updateOne({ _id: "d-club" }, { $set: { responderId: "r-club" } });
 
@@ -83,7 +83,7 @@ await autoReplies().insertMany([
   log(1, "r-shop", "Shop FAQs", "Obi Foods customers", "whatsapp", "Tolu", "Do you deliver to Lekki today?", "Yes! Delivery to Lekki is ₦2,500, and it arrives the same day if you order before 1pm.", null, 12 * 60_000),
   log(2, "r-shop", "Shop FAQs", "Obi Foods customers", "whatsapp", "Ngozi", "I want a refund for yesterday's order", null, "Refunds are something the business handles itself.", 50 * 60_000),
   log(3, "r-club", "Running club info", "Lekki running club", "telegram", "Ada", "What time is Saturday's run?", "Saturday runs start at 6am at the Lekki-Ikoyi bridge.", null, 3 * H),
-  log(4, "r-shop", "Shop FAQs", "Chidi Okafor", "whatsapp", "Chidi Okafor", "Are you open on Sunday?", "We're open Monday to Saturday, 9am to 6pm, so closed on Sundays.", null, 7 * H),
+  log(4, "r-shop", "Shop FAQs", "VIP customers", "whatsapp", "Chidi Okafor", "Are you open on Sunday?", "We're open Monday to Saturday, 9am to 6pm, so closed on Sundays.", null, 7 * H),
   log(5, "r-shop", "Shop FAQs", "Obi Foods customers", "whatsapp", "Kunle", "Can I pay with crypto?", null, "The facts don't cover payment methods.", 26 * H),
 ] as any);
 

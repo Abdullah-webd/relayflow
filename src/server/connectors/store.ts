@@ -1,4 +1,4 @@
-import { channelMessages, connections, destinations, type ConnectionStatus, type Platform } from "../db";
+import { isPersonalChat, channelMessages, connections, destinations, type ConnectionStatus, type Platform } from "../db";
 import { uid } from "../lib/crypto";
 
 export async function setConnectionStatus(
@@ -25,6 +25,7 @@ export async function upsertDestination(args: {
   kind?: string;
   selectedByDefault?: boolean;
 }): Promise<void> {
+  if (isPersonalChat({ platform: args.platform, kind: args.kind })) return; // groups and channels only
   const now = new Date();
   await destinations().updateOne(
     { connectionId: args.connectionId, externalId: args.externalId },

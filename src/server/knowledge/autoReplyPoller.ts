@@ -1,4 +1,4 @@
-import { connections, destinations } from "../db";
+import { connections, destinations, GROUPS_ONLY } from "../db";
 import { getRecentMessages } from "../connectors/manager";
 import { handleInbound } from "./autoReply";
 
@@ -10,7 +10,7 @@ const MAX_PER_TICK = 5; // don't flood a channel if a burst arrives
  * Auto-reply is chosen per destination, so we iterate destinations (not whole platforms).
  */
 export async function runAutoReplyTick(): Promise<void> {
-  const dests = await destinations().find({ autoReplyEnabled: true }).limit(200).toArray();
+  const dests = await destinations().find({ autoReplyEnabled: true, ...GROUPS_ONLY }).limit(200).toArray();
   if (dests.length === 0) return;
 
   for (const dest of dests) {

@@ -1,4 +1,4 @@
-import { knowledgeBase, knowledgeDocs, destinations, responders, type Responder } from "../db";
+import { knowledgeBase, knowledgeDocs, destinations, responders, isPersonalChat, GROUPS_ONLY, type Responder } from "../db";
 
 const MAX_CONTEXT_CHARS = 14_000; // keep the prompt affordable; Phase 2 swaps this for vector search
 
@@ -32,7 +32,7 @@ export async function ensureLegacyResponder(userId: string): Promise<void> {
   if (await responders().countDocuments({ userId }, { limit: 1 })) return;
   const kb = await knowledgeBase().findOne({ _id: userId });
   const looseDocs = await knowledgeDocs().countDocuments({ userId, responderId: null });
-  const enabled = await destinations().find({ userId, autoReplyEnabled: true }).project({ _id: 1 }).toArray();
+  const enabled = await destinations().find({ userId, autoReplyEnabled: true, ...GROUPS_ONLY }).project({ _id: 1 }).toArray();
   if (!kb?.guardrails?.trim() && looseDocs === 0 && enabled.length === 0) return;
 
   const id = `legacy-${userId}`;
@@ -71,7 +71,7 @@ export async function syncResponderDestinations(userId: string): Promise<void> {
     .toArray();
   const now = new Date();
   for (const d of current) {
-    const r = owner.get(d._id);
+    const r = isPersonalChat(d) ? undefined : owner.get(d._id); // never auto-reply in a private chat
     const enabled = Boolean(r?.active);
     const set: Record<string, unknown> = { responderId: r?._id ?? null, autoReplyEnabled: enabled, updatedAt: now };
     if (enabled && !d.autoReplyEnabled) {

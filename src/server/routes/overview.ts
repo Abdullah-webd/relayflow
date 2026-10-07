@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { autoReplies, channelMessages, connections, destinations, monitors, responders, scheduledTasks, users } from "../db";
+import { autoReplies, channelMessages, connections, destinations, monitors, responders, scheduledTasks, users, GROUPS_ONLY } from "../db";
 import { requireActivePlan } from "../auth/context";
 import { ensureLegacyResponder } from "../knowledge/knowledge";
 
@@ -57,7 +57,7 @@ export async function overviewRoutes(app: FastifyInstance) {
         platform: c.platform,
         status: c.status,
         displayName: c.displayName,
-        groups: await destinations().countDocuments({ connectionId: c._id, userId }),
+        groups: await destinations().countDocuments({ connectionId: c._id, userId, ...GROUPS_ONLY }),
         messages24h: dayCount.get(c._id) ?? 0,
         lastMessageAt: lastByConn.get(c._id) ?? null,
       });
@@ -122,7 +122,7 @@ export async function overviewRoutes(app: FastifyInstance) {
     const conns = await connections().find({ userId, status: "connected" }).toArray();
     const out = [];
     for (const c of conns) {
-      const dests = await destinations().find({ connectionId: c._id, userId }).sort({ name: 1 }).toArray();
+      const dests = await destinations().find({ connectionId: c._id, userId, ...GROUPS_ONLY }).sort({ name: 1 }).toArray();
       out.push({ connectionId: c._id, platform: c.platform, displayName: c.displayName, destinations: dests.map((d) => ({ id: d._id, name: d.name, kind: d.kind })) });
     }
     return { channels: out };

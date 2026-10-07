@@ -46,7 +46,7 @@ const TEMPLATES = [
 
 const RULE_SNIPPETS = ["Keep replies short and friendly.", "Never discuss refunds or complaints.", "Never promise delivery dates.", "Don't reply to greetings or chit-chat.", "Reply in the customer's language."];
 
-const kindLabel = (k: string) => (k === "dm" ? "Private chat" : k === "channel" ? "Channel" : "Group");
+const kindLabel = (k: string) => (k === "channel" ? "Channel" : "Group");
 
 function status(r: Responder): { tone: "live" | "idle" | "warn"; label: string } {
   if (r.active && r.destinationIds.length && r.docs.length) return { tone: "live", label: "Live" };
@@ -481,7 +481,7 @@ function GroupsPanel({ r, data, onChange }: { r: Responder; data: Data; onChange
     .filter((c) => tab === "all" || c.platform === tab)
     .flatMap((c) => c.destinations.map((d) => ({ ...d, platform: c.platform })))
     .filter((d) => (!q || d.name.toLowerCase().includes(q.toLowerCase())) && (!onlySelected || selected.has(d.id)))
-    .sort((a, b) => Number(selected.has(b.id)) - Number(selected.has(a.id)) || Number(a.kind === "dm") - Number(b.kind === "dm") || a.name.localeCompare(b.name));
+    .sort((a, b) => Number(selected.has(b.id)) - Number(selected.has(a.id)) || a.name.localeCompare(b.name));
 
   function toggle(d: Dest) {
     const on = !selected.has(d.id);
@@ -493,7 +493,7 @@ function GroupsPanel({ r, data, onChange }: { r: Responder; data: Data; onChange
   return (
     <Panel
       title={<span id="where">Where it answers</span>}
-      description={`It reads new messages in these chats and replies when its knowledge covers the question. ${selected.size} chosen.`}
+      description={`It reads new messages in these groups and replies when its knowledge covers the question. ${selected.size} chosen.`}
       bodyClass="p-0"
     >
       {data.channels.length === 0 ? (
@@ -513,14 +513,14 @@ function GroupsPanel({ r, data, onChange }: { r: Responder; data: Data; onChange
             )}
             <div className="relative min-w-[160px] flex-1">
               <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats" className="input h-9 pl-9" aria-label="Search chats" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search groups" className="input h-9 pl-9" aria-label="Search groups" />
             </div>
             <label className="flex h-9 cursor-pointer items-center gap-2 text-[13px] text-ink-600">
               <Switch size="sm" checked={onlySelected} onChange={setOnlySelected} label="Show chosen only" /> Chosen only
             </label>
           </div>
           <ul className="max-h-[360px] overflow-y-auto p-2">
-            {rows.length === 0 && <li className="px-3 py-8 text-center text-[13.5px] text-ink-500">{q ? `No chats match “${q}”.` : onlySelected ? "None chosen yet." : "No chats found yet. They appear shortly after connecting."}</li>}
+            {rows.length === 0 && <li className="px-3 py-8 text-center text-[13.5px] text-ink-500">{q ? `No groups match “${q}”.` : onlySelected ? "None chosen yet." : "No groups found yet. They appear shortly after connecting."}</li>}
             {rows.map((d) => {
               const on = selected.has(d.id);
               const other = owner.get(d.id);
