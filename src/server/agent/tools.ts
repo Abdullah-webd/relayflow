@@ -1,4 +1,4 @@
-import { getRecentMessages, listUserConnections, listDestinations, resolveSendTargets } from "../connectors/manager";
+import { getRecentMessages, listUserConnections, listDestinations, resolveSendTargets, findChats } from "../connectors/manager";
 import type { Platform } from "../db";
 import { env } from "../env";
 import { checkQuota, planLimitMessage } from "../billing/access";
@@ -68,8 +68,18 @@ export const tools: ToolDef[] = [
     handler: async (userId, args) => {
       const platform = args.platform && PLATFORMS.includes(args.platform) ? (args.platform as Platform) : undefined;
       const messages = await getRecentMessages(userId, { platform, group: args.group, limit: args.limit ?? 25 });
+      let note: string | undefined;
+      if (messages.length === 0) {
+        const chats = args.group ? await findChats(userId, args.group, platform) : [];
+        note = chats.length
+          ? `Found ${chats.map((c) => `"${c.name}"`).join(", ")}, but RelayFlow hasn't received any messages from it since it started saving this account's messages. Messages sent before that aren't available. Say exactly this; do NOT claim there were no messages for days or weeks.`
+          : args.group
+            ? `No chat matching "${args.group}" was found.`
+            : "RelayFlow hasn't received any messages on these channels since it started saving them. Messages sent before that aren't available.";
+      }
       return {
         count: messages.length,
+        ...(note ? { note } : {}),
         messages: messages.map((m) => ({
           platform: m.platform,
           channel: m.destinationName,

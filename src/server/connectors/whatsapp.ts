@@ -8,7 +8,7 @@ import makeWASocket, {
 } from "@whiskeysockets/baileys";
 import QRCode from "qrcode";
 import pino from "pino";
-import { whatsappAuth, connections, destinations } from "../db";
+import { whatsappAuth, connections, destinations, channelMessages } from "../db";
 import { encryptString, decryptString } from "../lib/crypto";
 import { heartbeat, setConnectionStatus, upsertDestination } from "./store";
 import { ingestMessage, type ChatKind } from "./ingest";
@@ -121,6 +121,53 @@ function rememberContact(connectionId: string, c: any) {
   if (c?.id && name) contactNames.set(`${connectionId}|${c.id}`, String(name));
 }
 
+/** A group's subject from cache, else ask WhatsApp (5s cap). */
+async function groupSubject(connectionId: string, jid: string): Promise<string | null> {
+  const cached = groupMetaCache.get(jid)?.subject;
+  if (cached) return cached;
+  const session = sessions.get(connectionId);
+  if (!session || session.status !== "connected") return null;
+  try {
+    const meta: any = await Promise.race([
+      session.socket.groupMetadata(jid),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5_000)),
+    ]);
+    if (meta?.subject) {
+      groupMetaCache.set(jid, meta);
+      return meta.subject;
+    }
+  } catch {
+    /* left the group or no access — keep the generic label */
+  }
+  return null;
+}
+
+/** Name chats that were stored without a proper name (older data, or groups seen before sync). */
+async function repairChatNames(userId: string, connectionId: string): Promise<void> {
+  const ids: string[] = await channelMessages().distinct("destinationId", { connectionId });
+  for (const jid of ids) {
+    if (!jid.endsWith("@g.us")) continue;
+    const dest = await destinations().findOne({ connectionId, externalId: jid });
+    if (dest && dest.name && dest.name !== "Chat" && !dest.name.includes("@")) continue;
+    const subject = await groupSubject(connectionId, jid);
+    if (subject) await upsertDestination({ userId, connectionId, platform: "whatsapp", externalId: jid, name: subject, kind: "group" });
+  }
+}
+
+/** Display name → saved contact name → phone number (never a generic "participant"). */
+function senderNameFor(connectionId: string, message: any, kind: ChatKind, chatName: string | null): string {
+  if (message.pushName) return message.pushName;
+  if (kind === "dm" && chatName) return chatName;
+  const participant: string | undefined = message.key?.participantPn || message.key?.participant || message.participant;
+  if (participant) {
+    const saved = contactNames.get(`${connectionId}|${participant}`);
+    if (saved) return saved;
+    const digits = participant.split("@")[0].split(":")[0];
+    if (/^\d{7,15}$/.test(digits) && participant.endsWith("@s.whatsapp.net")) return `+${digits}`;
+  }
+  return "Group member";
+}
+
 async function ingestWaMessage(userId: string, connectionId: string, message: any, history: boolean): Promise<void> {
   const jid: string | undefined = message?.key?.remoteJid;
   const kind = chatKindOf(jid);
@@ -130,7 +177,7 @@ async function ingestWaMessage(userId: string, connectionId: string, message: an
   const fromMe = Boolean(message.key.fromMe);
   const seconds = Number(message.messageTimestamp ?? Math.floor(Date.now() / 1000));
   let chatName: string | null = null;
-  if (kind === "group") chatName = groupMetaCache.get(jid)?.subject ?? null;
+  if (kind === "group") chatName = history ? groupMetaCache.get(jid)?.subject ?? null : await groupSubject(connectionId, jid);
   else chatName = (!fromMe && message.pushName) || contactNames.get(`${connectionId}|${jid}`) || null;
   await ingestMessage({
     userId,
@@ -140,7 +187,7 @@ async function ingestWaMessage(userId: string, connectionId: string, message: an
     chatName,
     chatKind: kind,
     messageId: String(message.key.id),
-    senderName: message.pushName || (kind === "dm" ? chatName : null) || "WhatsApp participant",
+    senderName: senderNameFor(connectionId, message, kind, chatName),
     fromMe,
     text,
     occurredAt: new Date(seconds * 1000),
@@ -223,6 +270,7 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
       console.info(`[whatsapp] connected connection=${connectionId.slice(-8)}`);
       await setConnectionStatus(connectionId, "connected", { lastError: null, heartbeatAt: new Date() });
       await syncGroups(userId, connectionId, socket);
+      repairChatNames(userId, connectionId).catch(() => undefined);
     }
     if (connection === "close") {
       const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;

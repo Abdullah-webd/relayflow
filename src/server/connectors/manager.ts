@@ -20,6 +20,14 @@ function matchByGroup<T extends { externalId: string; name: string }>(dests: T[]
   });
 }
 
+/** Replace raw platform ids (e.g. "1203…@g.us") with a readable label. */
+function readableChatName(name: string, id: string): string {
+  if (name && !name.includes("@") && name !== id) return name;
+  if (id.endsWith("@g.us")) return "A WhatsApp group (name unavailable)";
+  if (id.endsWith("@s.whatsapp.net") || id.endsWith("@lid")) return "A WhatsApp contact";
+  return name || "Chat";
+}
+
 export interface RecentMessage {
   platform: Platform;
   connectionId: string;
@@ -104,7 +112,7 @@ export async function getRecentMessages(
         results.push({
           platform: conn.platform,
           connectionId: conn._id,
-          destinationName: nameById.get(m.destinationId) || m.destinationName,
+          destinationName: readableChatName(nameById.get(m.destinationId) || m.destinationName, m.destinationId),
           destinationExternalId: m.destinationId,
           senderName: m.senderName,
           text: m.text,
@@ -132,6 +140,18 @@ export async function getRecentMessages(
   }
 
   return results.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, limit);
+}
+
+/** Chats (groups, channels, private chats) whose name matches `group`. */
+export async function findChats(userId: string, group: string, platform?: Platform): Promise<{ name: string; platform: Platform }[]> {
+  const query: Record<string, unknown> = { userId, status: "connected" };
+  if (platform) query.platform = platform;
+  const out: { name: string; platform: Platform }[] = [];
+  for (const conn of await connections().find(query).toArray()) {
+    const dests = await destinations().find({ connectionId: conn._id }).toArray();
+    for (const d of matchByGroup(dests, group)) out.push({ name: d.name, platform: conn.platform });
+  }
+  return out;
 }
 
 export interface DestinationView {

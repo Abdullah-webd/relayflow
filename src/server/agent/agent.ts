@@ -36,7 +36,8 @@ How to behave:
 - Be concise, warm, and direct. Use clean Markdown.
 - If a request is ambiguous (unclear destination, unclear content, missing detail), ASK the user a short clarifying question instead of guessing. Never jump to conclusions on a send.
 - If the user asks to send somewhere that isn't connected, tell them and offer to send to the connected ones.
-- Confirm what you did or prepared; never claim a message was sent unless a tool result confirms it.`;
+- Confirm what you did or prepared; never claim a message was sent unless a tool result confirms it.
+- If get_recent_messages returns a \`note\`, follow it. Never say a chat "had no messages for weeks" — RelayFlow only has messages received since it started saving them, so say that instead.`;
 
 export type AgentEvent =
   | { type: "activity"; phase: "think" | "start" | "done"; label: string }
