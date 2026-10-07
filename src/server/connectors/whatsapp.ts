@@ -1,4 +1,5 @@
 import makeWASocket, {
+  Browsers,
   DisconnectReason,
   initAuthCreds,
   BufferJSON,
@@ -226,9 +227,12 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
     logger,
     printQRInTerminal: false,
     markOnlineOnConnect: true,
-    syncFullHistory: false, // We keep only recent, live messages — never years of history.
+    // Ask the phone for its history at link time (WhatsApp only sends it to desktop clients,
+    // and only when linking). The pipeline keeps the last 14 days and drops older messages
+    // before touching the database, so a long history stays cheap.
+    syncFullHistory: true,
     keepAliveIntervalMs: 20_000,
-    browser: ["RelayFlow", "Chrome", "1.0.0"],
+    browser: Browsers.macOS("Desktop"),
     // REQUIRED for reliable group sends — otherwise sendMessage blocks fetching metadata.
     cachedGroupMetadata: async (jid) => groupMetaCache.get(jid),
     getMessage: async () => undefined,
@@ -316,7 +320,11 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
     for (const message of messages ?? []) {
       await ingestWaMessage(userId, connectionId, message, true).then(() => stored++).catch(() => undefined);
     }
-    if (messages?.length) console.info(`[whatsapp] history sync connection=${connectionId.slice(-8)} messages=${messages.length}`);
+    if (messages?.length) {
+      const cutoff = Date.now() / 1000 - 14 * 86400;
+      const recent = messages.filter((m: any) => Number(m.messageTimestamp ?? 0) >= cutoff).length;
+      console.info(`[whatsapp] history sync connection=${connectionId.slice(-8)} received=${messages.length} last14days=${recent}`);
+    }
   });
   socket.ev.on("contacts.upsert", (contacts: any[]) => contacts.forEach((c) => rememberContact(connectionId, c)));
   socket.ev.on("contacts.update", (contacts: any[]) => contacts.forEach((c) => rememberContact(connectionId, c)));
