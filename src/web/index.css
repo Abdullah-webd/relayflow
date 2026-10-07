@@ -37,6 +37,11 @@
   --ink-300: 200 205 212;
   --ink-200: 227 230 234;
 
+  --navy: 7 29 64; /* #071D40 logo navy: landing display type + ink */
+  --signal: 5 115 254; /* #0573FE logo blue: moving relay elements */
+  --wire: 220 231 247; /* #DCE7F7 tracks and inactive wires */
+  --ping: 245 165 36; /* #F5A524 "needs you" only */
+
   --canvas: 255 255 255; /* page backgrounds are always white (user preference) */
   --surface: 246 247 248;
   --line: 230 232 236;
@@ -215,4 +220,46 @@ body,
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ============================================================
+   Landing (motion-web redesign). Motion itself lives in GSAP/Motion
+   code; this is type, feedback states and transitions.
+   ============================================================ */
+.rf-landing {
+  font-family: "Funnel Sans", ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: normal;
+  color: rgb(var(--ink-700));
+}
+.rf-landing .font-display { font-family: "Funnel Display", ui-sans-serif, system-ui, sans-serif; }
+
+/* Masked line reveals: pad each line so the mask doesn't clip descenders (g, y, p) at tight leading */
+.rf-landing .split-line { padding-bottom: 0.1em; margin-bottom: -0.1em; }
+
+/* Button label that rolls up on hover */
+.roll { position: relative; display: inline-flex; overflow: hidden; height: 1.25em; line-height: 1.25em; }
+.roll-a, .roll-b { display: block; transition: transform 420ms var(--ease-out-expo); }
+.roll-b { position: absolute; inset: 0; transform: translateY(105%); }
+@media (hover: hover) and (pointer: fine) {
+  a:hover > .roll .roll-a, button:hover > .roll .roll-a { transform: translateY(-105%); }
+  a:hover > .roll .roll-b, button:hover > .roll .roll-b { transform: translateY(0); }
+}
+
+/* Underline that draws in from the left */
+.u-link {
+  background: linear-gradient(currentColor 0 0) 0 100% / 0% 1px no-repeat;
+  transition: background-size 380ms var(--ease-out), color 150ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .u-link:hover { background-size: 100% 1px; }
+}
+
+/* Route transitions (TransitionLink → document.startViewTransition) */
+::view-transition-old(root) { animation: 180ms ease-in both rf-vt-out; }
+::view-transition-new(root) { animation: 360ms var(--ease-out-expo) 60ms both rf-vt-in; }
+@keyframes rf-vt-out { to { opacity: 0; transform: translateY(-12px); filter: blur(4px); } }
+@keyframes rf-vt-in { from { opacity: 0; transform: translateY(16px); filter: blur(4px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*), ::view-transition-new(*), ::view-transition-group(*) { animation-duration: 0s !important; }
 }

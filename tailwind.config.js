@@ -33,12 +33,19 @@ export default {
           300: v("ink-300"),
           200: v("ink-200"),
         },
+        // Landing palette (DESIGN-PLAN.md): logo navy ink, signal blue for moving "relay" elements.
+        navy: v("navy"),
+        signal: v("signal"),
+        wire: v("wire"),
+        ping: v("ping"),
         canvas: v("canvas"),
         surface: v("surface"),
         line: { DEFAULT: v("line"), strong: v("line-strong") },
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
+        display: ['"Funnel Display"', "ui-sans-serif", "system-ui", "sans-serif"],
+        text: ['"Funnel Sans"', "ui-sans-serif", "system-ui", "sans-serif"],
         mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
       },
       fontSize: {
