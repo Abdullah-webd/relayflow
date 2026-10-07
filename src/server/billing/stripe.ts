@@ -87,6 +87,27 @@ export async function createCheckoutSession(user: User, planKey: PlanKey, origin
   return session.url;
 }
 
+/**
+ * Switch an existing subscription between Starter and Pro. Upgrades are invoiced right away
+ * (pay the prorated difference now); downgrades credit the difference to the next bill.
+ */
+export async function changeSubscriptionPlan(user: User, planKey: PlanKey): Promise<void> {
+  if (!user.stripeSubscriptionId) throw new Error("No subscription to change.");
+  const stripe = getStripe();
+  const prices = await ensurePrices();
+  const sub = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+  const item = sub.items.data[0];
+  if (!item) throw new Error("Subscription has no items.");
+  const upgrading = PLANS[planKey].amountCents > (item.price?.unit_amount ?? 0);
+  const updated = await stripe.subscriptions.update(sub.id, {
+    items: [{ id: item.id, price: prices[planKey] }],
+    proration_behavior: upgrading ? "always_invoice" : "create_prorations",
+    metadata: { ...(sub.metadata || {}), userId: user._id, plan: planKey },
+    expand: ["items.data.price"],
+  });
+  await syncUserFromSubscription(user._id, updated);
+}
+
 export async function createPortalSession(user: User, origin: string): Promise<string> {
   const stripe = getStripe();
   const customer = await ensureCustomer(user);

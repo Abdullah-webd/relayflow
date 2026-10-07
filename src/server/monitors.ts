@@ -2,7 +2,7 @@ import { monitors, users, connections, type Monitor, type Platform } from "./db"
 import { getRecentMessages } from "./connectors/manager";
 import { judgeMonitor } from "./agent/monitorJudge";
 import { sendEmail } from "./lib/email";
-import { userHasAccessById } from "./billing/access";
+import { userHasAccessById, withinQuota, modelForUserId } from "./billing/access";
 
 export const MIN_INTERVAL_MINUTES = 15;
 export const DEFAULT_INTERVAL_MINUTES = 30;
@@ -25,6 +25,11 @@ async function runMonitor(m: Monitor): Promise<void> {
   // Paywall guardrail: monitors pause (and resume automatically) with the subscription.
   if (!(await userHasAccessById(m.userId))) {
     await monitors().updateOne({ _id: m._id }, { $set: { lastCheckedAt: now, updatedAt: now, lastResult: "Paused: subscription required" } });
+    return;
+  }
+  // Plan guardrail: after a downgrade to Starter only the oldest 3 active monitors run.
+  if (!(await withinQuota(m.userId, "monitors", m._id))) {
+    await monitors().updateOne({ _id: m._id }, { $set: { lastCheckedAt: now, updatedAt: now, lastResult: "Paused: over the Starter plan limit (upgrade to Pro for unlimited)" } });
     return;
   }
 
@@ -57,6 +62,7 @@ async function runMonitor(m: Monitor): Promise<void> {
     judged = await judgeMonitor(
       m.condition,
       fresh.map((f) => ({ from: f.senderName, text: f.text, channel: f.destinationName, at: f.occurredAt.toISOString() })),
+      await modelForUserId(m.userId), // Starter: standard model; Pro: smarter model
     );
   }
 

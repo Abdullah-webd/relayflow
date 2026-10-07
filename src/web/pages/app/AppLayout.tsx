@@ -154,7 +154,9 @@ export default function AppLayout() {
               : user?.subscriptionStatus === "trialing"
               ? "Trial"
               : user?.subscriptionStatus === "active"
-              ? "Pro"
+              ? user?.plan === "starter"
+                ? "Starter"
+                : "Pro"
               : "—"}
           </span>
         </Link>

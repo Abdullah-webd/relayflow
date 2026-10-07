@@ -27,7 +27,7 @@ export interface User {
   emailVerified: boolean;
   timezone: string;
   // ---- Billing ----
-  plan?: "pro" | null;
+  plan?: "starter" | "pro" | null;
   subscriptionStatus?: SubscriptionStatus;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;

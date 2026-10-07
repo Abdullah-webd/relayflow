@@ -5,7 +5,6 @@ const toc = [
   { id: "collect", label: "What we collect" },
   { id: "use", label: "How we use it" },
   { id: "ai", label: "AI processing" },
-  { id: "google", label: "Google user data" },
   { id: "sharing", label: "Who we share it with" },
   { id: "retention", label: "How long we keep it" },
   { id: "security", label: "Security" },
@@ -40,8 +39,8 @@ export default function Privacy() {
         <List
           items={[
             <><b className="font-medium text-ink-900">Account details:</b> your name (optional), email address, and password (stored only as a one-way hash), plus your time zone.</>,
-            <><b className="font-medium text-ink-900">Channel connections:</b> the login sessions or access tokens needed to connect WhatsApp, Telegram, Slack and Gmail, and the list of groups and channels on those accounts.</>,
-            <><b className="font-medium text-ink-900">Messages:</b> recent messages from the groups, channels and inboxes you connect, including sender names and timestamps, so the agent can answer questions about them. For Gmail, we read messages and send email on your behalf.</>,
+            <><b className="font-medium text-ink-900">Channel connections:</b> the login sessions or access tokens needed to connect WhatsApp, Telegram and Slack, and the list of groups and channels on those accounts.</>,
+            <><b className="font-medium text-ink-900">Messages:</b> recent messages from the groups and channels you connect, including sender names and timestamps, so the agent can answer questions about them.</>,
             <><b className="font-medium text-ink-900">What you create in RelayFlow:</b> your chats with the agent, knowledge-base content you add (FAQs, policies, uploaded documents), scheduled tasks, monitors, auto-reply settings, and a log of auto-replies sent or skipped.</>,
             <><b className="font-medium text-ink-900">Billing:</b> your subscription status and Stripe customer and subscription IDs. Card details are entered on Stripe’s page and never reach our servers.</>,
             <><b className="font-medium text-ink-900">Technical data:</b> IP address, browser details and server logs needed to run and secure the service.</>,
@@ -75,23 +74,6 @@ export default function Privacy() {
         <p>AI output can be wrong. Nothing the agent drafts is sent without your approval, except auto-replies on the specific groups where you turn them on.</p>
       </Section>
 
-      <Section id="google" title="Google user data">
-        <p>
-          If you connect Gmail, RelayFlow requests permission to read your email and send email on your behalf. We use this access only to
-          show you and summarize your recent email, check the monitors you create, and send the emails you approve or the auto-replies you
-          enable. We don’t use Gmail data for advertising, and people don’t read it unless you ask us for help, it’s needed for security, or
-          the law requires it.
-        </p>
-        <p>
-          RelayFlow’s use and transfer of information received from Google APIs adheres to the{" "}
-          <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700">
-            Google API Services User Data Policy
-          </a>
-          , including the Limited Use requirements. You can revoke access at any time by disconnecting Gmail in RelayFlow or from your Google
-          Account settings.
-        </p>
-      </Section>
-
       <Section id="sharing" title="Who we share it with">
         <p>We share data only with service providers that help us run RelayFlow, and only as needed:</p>
         <List
@@ -102,7 +84,7 @@ export default function Privacy() {
             "Stripe: payments and subscription billing.",
             "Resend: sending service emails.",
             "Google Fonts: serves the website’s fonts, which means your browser requests them from Google.",
-            "WhatsApp, Telegram, Slack and Google: the platforms you connect, when RelayFlow reads from or sends to them on your behalf.",
+            "WhatsApp, Telegram and Slack: the platforms you connect, when RelayFlow reads from or sends to them on your behalf.",
           ]}
         />
         <p>We may also disclose information if the law requires it, or to protect the rights, safety and security of our users or the service.</p>
@@ -123,7 +105,7 @@ export default function Privacy() {
       <Section id="security" title="Security">
         <p>
           Channel sessions and tokens are encrypted with AES-256-GCM before they’re stored. Passwords are hashed with bcrypt. All traffic uses
-          HTTPS. Slack and Gmail connect through their official OAuth sign-in, so we never see those passwords. No system is perfectly secure,
+          HTTPS. Slack connects through its official OAuth sign-in, so we never see your Slack password. No system is perfectly secure,
           but we work to protect your data and will notify you as the law requires if a breach affects it.
         </p>
       </Section>

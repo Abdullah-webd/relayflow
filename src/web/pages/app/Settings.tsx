@@ -2,16 +2,19 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/auth";
 import { api } from "../../lib/api";
-import { PRICE_USD } from "../../lib/pricing";
+import { PRICES } from "../../lib/pricing";
 import { CreditCard, Loader2, Check, ExternalLink } from "lucide-react";
 
 interface BillingState {
-  plan: "pro" | null;
+  plan: "starter" | "pro" | null;
   status: string;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   hasStripeSubscription?: boolean;
+  paidPlan?: "starter" | "pro" | null;
+  limits?: { monitors: number | null; scheduledTasks: number | null; autoReply: boolean; model: string };
+  usage?: { monitors: number; scheduledTasks: number };
 }
 
 const TIMEZONES: string[] = (() => {
@@ -25,7 +28,7 @@ const TIMEZONES: string[] = (() => {
   return ["UTC", "Africa/Lagos", "Europe/London", "America/New_York", "America/Los_Angeles", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore"];
 })();
 
-const PLAN_NAMES: Record<string, string> = { pro: "Pro" };
+const PLAN_NAMES: Record<string, string> = { starter: "Starter", pro: "Pro" };
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
@@ -168,7 +171,9 @@ export default function Settings() {
               </span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-semibold text-ink-900">{billing?.plan ? PLAN_NAMES[billing.plan] : "No plan"}</span>
+                  <span className="font-semibold text-ink-900">
+                    {billing?.status === "trialing" ? "Free trial (Pro features)" : billing?.plan && billing.status === "active" ? PLAN_NAMES[billing.plan] : "No plan"}
+                  </span>
                   <StatusBadge status={billing?.status || "none"} />
                 </div>
                 <div className="text-sm text-ink-500">
@@ -179,7 +184,7 @@ export default function Settings() {
                     : billing?.cancelAtPeriodEnd
                     ? `Cancels on ${fmt(billing?.currentPeriodEnd ?? null)}`
                     : billing?.currentPeriodEnd
-                    ? `Renews ${fmt(billing.currentPeriodEnd)} · $${PRICE_USD}/month`
+                    ? `Renews ${fmt(billing.currentPeriodEnd)} · $${PRICES[billing.plan === "starter" ? "starter" : "pro"]}/month`
                     : billing?.status === "active"
                     ? "Active"
                     : "Subscribe to use RelayFlow"}
@@ -188,16 +193,37 @@ export default function Settings() {
             </div>
             <div className="flex gap-2">
               {billing?.hasStripeSubscription ? (
-                <button onClick={manageBilling} disabled={portalBusy} className="btn-primary">
-                  {portalBusy ? <Loader2 className="animate-spin" size={18} /> : <>Manage billing <ExternalLink size={16} /></>}
-                </button>
+                <>
+                  <button onClick={() => nav("/pricing")} className="btn-ghost">
+                    {billing.plan === "starter" ? "Upgrade to Pro" : "Change plan"}
+                  </button>
+                  <button onClick={manageBilling} disabled={portalBusy} className="btn-primary">
+                    {portalBusy ? <Loader2 className="animate-spin" size={18} /> : <>Manage billing <ExternalLink size={16} /></>}
+                  </button>
+                </>
               ) : billing && billing.status !== "active" ? (
                 <button onClick={() => nav("/pricing")} className="btn-primary">
-                  Subscribe · ${PRICE_USD}/month
+                  Choose a plan
                 </button>
               ) : null}
             </div>
           </div>
+
+          {/* What the current plan includes, and how much of it is used. */}
+          {billing?.limits && billing.usage && (
+            <dl className="mt-4 grid sm:grid-cols-3 gap-3">
+              {[
+                { t: "Monitors", v: billing.limits.monitors === null ? `${billing.usage.monitors} · unlimited` : `${billing.usage.monitors} of ${billing.limits.monitors}` },
+                { t: "Scheduled tasks", v: billing.limits.scheduledTasks === null ? `${billing.usage.scheduledTasks} · unlimited` : `${billing.usage.scheduledTasks} of ${billing.limits.scheduledTasks}` },
+                { t: "Auto-replies & AI", v: billing.limits.autoReply ? "Included · smarter model" : "Pro only · standard model" },
+              ].map((row) => (
+                <div key={row.t} className="rounded-xl border border-line px-4 py-3">
+                  <dt className="text-[12px] text-ink-500">{row.t}</dt>
+                  <dd className="mt-0.5 text-[14px] font-medium text-ink-900 tabular-nums">{row.v}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </Section>
 
         {/* Security */}

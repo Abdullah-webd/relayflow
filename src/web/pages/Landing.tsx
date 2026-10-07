@@ -4,7 +4,7 @@ import { Logo } from "../components/Logo";
 import { Reveal } from "../components/Reveal";
 import { ChannelMark, CHANNEL_COLOR, CHANNEL_NAME, type Channel } from "../components/ChannelMark";
 import { useAuth } from "../lib/auth";
-import { PRICE_USD } from "../lib/pricing";
+import { PRICES } from "../lib/pricing";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -26,7 +26,7 @@ import {
 // Content
 // ---------------------------------------------------------------------------
 
-const CHANNELS: Channel[] = ["whatsapp", "telegram", "slack", "gmail"];
+const CHANNELS: Channel[] = ["whatsapp", "telegram", "slack"];
 
 const navLinks = [
   { label: "Product", href: "#product" },
@@ -55,19 +55,41 @@ const customers: Customer[] = [
   },
 ];
 
-const planFeatures = [
-  "Unlimited AI actions, no usage credits",
-  "WhatsApp, Telegram, Slack and Gmail",
-  "Approve-before-send on every message",
-  "Scheduled tasks and monitors",
-  "Auto-replies from your knowledge base",
-  "Unlimited chat sessions",
+// Mirrors src/server/billing/plans.ts (the server is the source of truth for prices).
+const landingPlans = [
+  {
+    name: "Starter",
+    price: PRICES.starter,
+    blurb: "Run your channels from one AI chat",
+    popular: false,
+    features: [
+      "WhatsApp, Telegram and Slack",
+      "Ask, summarize and search your chats",
+      "Send to one group or all channels",
+      "Approve-before-send on every message",
+      "Up to 5 scheduled tasks",
+      "Up to 3 monitors",
+    ],
+  },
+  {
+    name: "Pro",
+    price: PRICES.pro,
+    blurb: "Smarter AI that also replies for you",
+    popular: true,
+    features: [
+      "Everything in Starter",
+      "Smarter AI model for more accurate answers",
+      "Auto-replies from your knowledge base",
+      "Unlimited scheduled tasks",
+      "Unlimited monitors",
+    ],
+  },
 ];
 
 const faqs = [
   {
     q: "Is RelayFlow secure?",
-    a: "Yes. Sensitive credentials are encrypted at the field level, and Slack and Gmail connect through their official OAuth sign-in. Anything the agent sends for you waits for your approval, and auto-replies only run on the channels you turn them on for.",
+    a: "Yes. Sensitive credentials are encrypted at the field level, and Slack connects through its official OAuth sign-in. Anything the agent sends for you waits for your approval, and auto-replies only run on the channels you turn them on for.",
   },
   {
     q: "Does it store my whole message history?",
@@ -79,7 +101,7 @@ const faqs = [
   },
   {
     q: "How much does it cost?",
-    a: `One plan at $${PRICE_USD} a month with everything included: unlimited AI actions, all four channels, scheduled tasks and monitors. Try it free for 1 day first. No credit card required.`,
+    a: `Starter is $${PRICES.starter} a month and Pro is $${PRICES.pro} a month. Pro adds auto-replies from your knowledge base, a smarter AI model, and unlimited monitors and scheduled tasks. Every account starts with a 1-day free trial of Pro, no credit card required.`,
   },
   {
     q: "Can I cancel anytime?",
@@ -87,7 +109,7 @@ const faqs = [
   },
   {
     q: "Which channels can I connect?",
-    a: "WhatsApp, Telegram, Slack and Gmail. You can connect one or all four, and see at a glance which are live.",
+    a: "WhatsApp, Telegram and Slack. You can connect one or all three, and see at a glance which are live. Gmail support is coming soon.",
   },
 ];
 
@@ -131,7 +153,7 @@ const inbox: { channel: Channel; name: string; unread: number; active?: boolean 
   { channel: "whatsapp", name: "Wholesale Buyers", unread: 3 },
   { channel: "telegram", name: "Dev Syndicate", unread: 5 },
   { channel: "slack", name: "#support", unread: 2 },
-  { channel: "gmail", name: "Inbox", unread: 7 },
+  { channel: "slack", name: "#sales", unread: 7 },
 ];
 
 function ApprovalCard({ compact = false }: { compact?: boolean }) {
@@ -281,7 +303,7 @@ function AnswerVisual() {
           <div className="text-[12px] font-medium text-ink-500 mb-2">Needs you · 2</div>
           <div className="space-y-2">
             {[
-              { c: "gmail" as Channel, who: "Priya Nair", what: "Asked to reschedule Thursday’s supplier call to Friday.", when: "2h ago" },
+              { c: "slack" as Channel, who: "Priya Nair", what: "Asked in #sales to move Thursday’s supplier call to Friday.", when: "2h ago" },
               { c: "whatsapp" as Channel, who: "Chidi Okafor", what: "Wants a quote for 50 cartons before 5pm.", when: "35m ago" },
             ].map((r) => (
               <div key={r.who} className="flex items-start gap-3 rounded-xl border border-line px-3.5 py-3">
@@ -466,7 +488,7 @@ export default function Landing() {
               </h1>
 
               <p className="rf-in mt-6 text-[17px] sm:text-lead text-ink-600 max-w-[54ch]" style={i(2)}>
-                RelayFlow reads your WhatsApp, Telegram, Slack and Gmail, tells you what needs attention, and drafts replies you approve before anything is sent.
+                RelayFlow reads your WhatsApp, Telegram and Slack, tells you what needs attention, and drafts replies you approve before anything is sent.
               </p>
 
               <div className="rf-in mt-8 flex flex-col sm:flex-row sm:items-center gap-3" style={i(3)}>
@@ -534,7 +556,7 @@ export default function Landing() {
             <Reveal>
               <SectionHeading
                 title="Everything the agent does, with you in control."
-                body="Read, reply, broadcast, schedule and watch across all four channels from one conversation."
+                body="Read, reply, broadcast, schedule and watch across all your channels from one conversation."
               />
             </Reveal>
 
@@ -565,7 +587,7 @@ export default function Landing() {
               </Reveal>
 
               <Reveal className="lg:col-span-2 flex" delay={80}>
-                <Tile className="w-full" title="Send to every channel at once" body="One message to a single group or all four channels together.">
+                <Tile className="w-full" title="Send to every channel at once" body="One message to a single group or every channel together.">
                   <MiniCard className="p-3 space-y-1.5">
                     {CHANNELS.map((c) => (
                       <div key={c} className="flex items-center gap-2.5 h-7 text-[13px] text-ink-700">
@@ -642,7 +664,7 @@ export default function Landing() {
               {[
                 {
                   title: "Connect your channels",
-                  body: "Scan a QR code for WhatsApp, sign in to Telegram, and authorize Slack and Gmail with their official sign-in.",
+                  body: "Scan a QR code for WhatsApp, sign in to Telegram, and authorize Slack with its official sign-in.",
                   visual: (
                     <div className="flex items-center gap-3">
                       <span className="grid place-items-center h-12 w-12 rounded-lg border border-line bg-white text-ink-900 shadow-xs">
@@ -710,7 +732,7 @@ export default function Landing() {
               <dl className="divide-y divide-line border-y border-line">
                 {[
                   { icon: ShieldCheck, t: "Approval before the agent sends", d: "Messages, broadcasts and scheduled tasks wait for your OK. Auto-replies run only on channels you switch them on for." },
-                  { icon: KeyRound, t: "Official sign-in for Slack and Gmail", d: "Connected through OAuth. RelayFlow never sees your Slack or Google password." },
+                  { icon: KeyRound, t: "Official sign-in for Slack", d: "Connected through OAuth. RelayFlow never sees your Slack password." },
                   { icon: Lock, t: "Encrypted credentials", d: "Channel sessions and tokens are encrypted at the field level before they’re stored." },
                   { icon: Clock, t: "Only recent context", d: "Channel messages are deleted automatically after 14 days. It never archives your full history." },
                 ].map((row) => (
@@ -774,40 +796,51 @@ export default function Landing() {
 
         {/* ---------------- Pricing ---------------- */}
         <section id="pricing" className="py-24 sm:py-32 border-t border-line">
-          <Container className="grid lg:grid-cols-12 gap-12 items-start">
-            <Reveal className="lg:col-span-5">
+          <Container>
+            <Reveal>
               <SectionHeading
-                title="One plan. Everything included."
-                body={`Try everything free for 1 day, no credit card required. Then $${PRICE_USD} a month. No usage credits, no tiers, no surprises.`}
+                title="Simple plans. Start free."
+                body={`Try every Pro feature free for 1 day, no credit card required. Then choose Starter at $${PRICES.starter} or Pro at $${PRICES.pro} a month. No usage credits.`}
               />
-              <a href="#faq" className="mt-6 inline-flex items-center gap-1.5 text-[15px] font-medium text-brand-700 hover:text-brand-800 transition-colors">
-                Read the FAQ <ArrowRight size={15} />
-              </a>
             </Reveal>
-            <Reveal className="lg:col-span-6 lg:col-start-7" delay={100}>
-              <div className="rounded-3xl border border-line bg-white p-7 sm:p-9 shadow-md">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-[16px] font-medium text-ink-900">Pro</h3>
-                  <span className="rounded-full border border-line px-2.5 h-6 inline-flex items-center text-[12px] text-ink-600">1-day free trial</span>
-                </div>
-                <div className="mt-6 flex items-baseline gap-1.5">
-                  <span className="text-display-lg font-semibold text-ink-900 tabular-nums">${PRICE_USD}</span>
-                  <span className="text-[15px] text-ink-500">/month</span>
-                </div>
-                <ul className="mt-8 grid sm:grid-cols-2 gap-x-6 gap-y-3">
-                  {planFeatures.map((f) => (
-                    <li key={f} className="flex items-start gap-2.5 text-[14px] text-ink-700">
-                      <Check size={16} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-600" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link to={loggedIn ? "/app" : "/signup"} className="btn-primary mt-9 h-11 w-full text-[15px]">
-                  {loggedIn ? "Go to dashboard" : "Start free trial"}
-                </Link>
-                <p className="mt-3 text-center text-[13px] text-ink-500">No credit card required for the trial · Cancel anytime</p>
-              </div>
-            </Reveal>
+            <div className="mt-12 grid md:grid-cols-2 gap-5 max-w-4xl">
+              {landingPlans.map((p, n) => (
+                <Reveal key={p.name} delay={n * 100} className="flex">
+                  <div
+                    className={`w-full flex flex-col rounded-3xl bg-white p-7 sm:p-8 ${
+                      p.popular ? "border-2 border-brand-600 shadow-md" : "border border-line"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-[17px] font-semibold text-ink-900">{p.name}</h3>
+                      {p.popular && (
+                        <span className="rounded-full bg-brand-600 text-white px-2.5 h-6 inline-flex items-center text-[12px] font-medium">Most popular</span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-[14px] text-ink-500">{p.blurb}</p>
+                    <div className="mt-6 flex items-baseline gap-1.5">
+                      <span className="text-display-lg font-semibold text-ink-900 tabular-nums">${p.price}</span>
+                      <span className="text-[15px] text-ink-500">/month</span>
+                    </div>
+                    <ul className="mt-7 space-y-3 flex-1">
+                      {p.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2.5 text-[14px] text-ink-700">
+                          <Check size={16} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-600" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    <Link
+                      to={loggedIn ? "/pricing" : "/signup"}
+                      className={`mt-8 h-11 w-full text-[15px] ${p.popular ? "btn-primary" : "btn-ghost"}`}
+                    >
+                      {loggedIn ? "See your plan" : "Start free trial"}
+                    </Link>
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+            <p className="mt-6 text-[13px] text-ink-500">No credit card required for the trial · Switch plans or cancel anytime</p>
           </Container>
         </section>
 
@@ -879,7 +912,7 @@ export default function Landing() {
           <div className="flex flex-col md:flex-row md:justify-between gap-10">
             <div className="max-w-xs">
               <Logo byline />
-              <p className="mt-4 text-[14px] leading-relaxed text-ink-500">One AI agent across WhatsApp, Telegram, Slack and Gmail.</p>
+              <p className="mt-4 text-[14px] leading-relaxed text-ink-500">One AI agent across WhatsApp, Telegram and Slack.</p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-10 sm:gap-16">
               <div>

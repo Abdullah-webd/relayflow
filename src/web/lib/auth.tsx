@@ -9,7 +9,7 @@ export interface User {
   name: string;
   emailVerified: boolean;
   timezone: string;
-  plan: "pro" | null;
+  plan: "starter" | "pro" | null;
   subscriptionStatus: SubStatus;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;

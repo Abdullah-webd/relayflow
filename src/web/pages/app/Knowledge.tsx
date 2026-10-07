@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../lib/api";
+import { Link } from "react-router-dom";
+import { useAuth } from "../../lib/auth";
+import { PRICES } from "../../lib/pricing";
 import { BookOpen, FileText, Upload, Trash2, Check, Loader2, Bot, ShieldCheck } from "lucide-react";
 
 interface Doc { id: string; title: string; source: "text" | "pdf"; chars: number; createdAt: string }
@@ -10,7 +13,43 @@ interface KnowledgeData { guardrails: string; docs: Doc[]; channels: Channel[]; 
 
 const PLATFORM_LABEL: Record<string, string> = { whatsapp: "WhatsApp", telegram: "Telegram", slack: "Slack", gmail: "Gmail" };
 
+// Knowledge base + auto-replies are a Pro feature. Starter users see what it does and how to get it.
 export default function Knowledge() {
+  const { user } = useAuth();
+  if (user?.plan === "starter" && !user?.paywallDisabled) return <KnowledgeLocked />;
+  return <KnowledgeEditor />;
+}
+
+function KnowledgeLocked() {
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-3xl px-6 py-8">
+        <h1 className="text-2xl font-semibold text-ink-900">Knowledge &amp; auto-replies</h1>
+        <div className="mt-6 rounded-2xl border border-line p-8">
+          <span className="inline-flex items-center rounded-full bg-brand-50 px-2.5 h-6 text-[12px] font-medium text-brand-700">Pro feature</span>
+          <h2 className="mt-4 text-[20px] font-semibold tracking-[-0.015em] text-ink-900">Let RelayFlow answer customers for you</h2>
+          <p className="mt-2 text-[15px] leading-relaxed text-ink-600">
+            Add your FAQs, prices and policies, then switch on auto-replies for the groups you choose. RelayFlow answers customer questions
+            from your facts, and stays silent when your facts don&rsquo;t clearly cover the question.
+          </p>
+          <ul className="mt-5 space-y-2 text-[14px] text-ink-700">
+            {["Upload documents or type your FAQs", "Choose exactly which groups get auto-replies", "Answers only from your own facts, never guesses"].map((f) => (
+              <li key={f} className="flex items-start gap-2.5">
+                <Check size={16} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-600" />
+                {f}
+              </li>
+            ))}
+          </ul>
+          <Link to="/pricing" className="btn-primary mt-7 h-10 px-4">
+            Upgrade to Pro · ${PRICES.pro}/month
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeEditor() {
   const [data, setData] = useState<KnowledgeData | null>(null);
   const [guardrails, setGuardrails] = useState("");
   const [savingGuard, setSavingGuard] = useState(false);

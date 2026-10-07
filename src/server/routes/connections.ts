@@ -146,13 +146,14 @@ export async function connectionRoutes(app: FastifyInstance) {
 
   // ---------- Gmail OAuth ----------
   app.get("/connections/gmail/start", { preHandler: requireActivePlan }, async (req, reply) => {
+    if (!env.gmailEnabled) return reply.code(410).send({ error: "gmail_disabled", detail: "Gmail isn't supported right now." });
     if (!env.google.clientId) return reply.code(400).send({ error: "not_configured", detail: "Gmail is not configured." });
     return { url: gmailAuthUrl(req.userId!) };
   });
 
   app.get("/oauth/google/callback", async (req, reply) => {
     const query = req.query as { code?: string; state?: string; error?: string };
-    if (query.error || !query.code || !query.state) return reply.redirect(redirectError("gmail"));
+    if (!env.gmailEnabled || query.error || !query.code || !query.state) return reply.redirect(redirectError("gmail"));
     try {
       const { userId } = gmailState(query.state);
       await completeGmailOAuth(userId, query.code);

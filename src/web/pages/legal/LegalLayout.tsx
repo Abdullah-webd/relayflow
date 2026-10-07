@@ -4,7 +4,7 @@ import { Logo } from "../../components/Logo";
 
 // Shared facts for the legal pages. Update LEGAL_UPDATED together with TERMS_VERSION in
 // src/server/legal.ts whenever the Terms or Privacy Policy change materially.
-export const LEGAL_UPDATED = "September 30, 2026";
+export const LEGAL_UPDATED = "October 7, 2026";
 export const OPERATOR = "Ajala Abdullah";
 export const CONTACT_PHONE = "+44 7405 655419";
 export const CONTACT_TEL = "+447405655419";

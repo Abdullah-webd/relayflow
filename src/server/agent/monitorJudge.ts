@@ -24,7 +24,7 @@ export interface JudgeResult {
  * Decide whether any of the given (new) messages satisfy a natural-language monitor
  * condition. Used for fuzzy intent like "someone asks about cloth" — semantic, not keyword.
  */
-export async function judgeMonitor(condition: string, messages: JudgeMessage[]): Promise<JudgeResult> {
+export async function judgeMonitor(condition: string, messages: JudgeMessage[], model: string = env.openaiModel): Promise<JudgeResult> {
   if (!client || messages.length === 0) return { matched: false, summary: "" };
   const list = messages
     .map((m, i) => `${i + 1}. [${m.channel}] ${m.from}: ${m.text.replace(/\s+/g, " ").slice(0, 400)}`)
@@ -41,7 +41,7 @@ export async function judgeMonitor(condition: string, messages: JudgeMessage[]):
   const startedAt = Date.now();
   try {
     const res: any = await client.chat.completions.create({
-      model: env.openaiModel,
+      model,
       messages: [
         { role: "system", content: "You are a precise monitoring classifier. Output only a single JSON object, nothing else." },
         { role: "user", content: prompt },

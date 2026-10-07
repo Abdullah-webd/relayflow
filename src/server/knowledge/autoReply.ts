@@ -3,7 +3,7 @@ import { env } from "../env";
 import { autoReplies, users, type Platform } from "../db";
 import { uid } from "../lib/crypto";
 import { getKnowledgeContext } from "./knowledge";
-import { userHasAccessById } from "../billing/access";
+import { userHasAccessById, limitsForUser } from "../billing/access";
 import { sendToTargets, type SendTarget } from "../connectors/manager";
 import { sendGmail } from "../connectors/gmail";
 
@@ -97,6 +97,8 @@ export async function handleInbound(msg: InboundMessage): Promise<{ replied: boo
 
     // Paywall guardrail: no auto-replies without an active trial or subscription.
     if (!(await userHasAccessById(msg.userId))) return { replied: false, reason: "subscription required" };
+    // Auto-replies are a Pro feature.
+    if (!limitsForUser(await users().findOne({ _id: msg.userId })).autoReply) return { replied: false, reason: "pro plan required" };
 
     // Rate-limit: at most one auto-reply per sender+destination per 90s.
     const recent = await autoReplies().findOne({

@@ -1,6 +1,10 @@
 import OpenAI from "openai";
 import { env } from "../env";
 import { toolByName, chatToolSchemas } from "./tools";
+import { modelForUserId } from "../billing/access";
+
+// Channels the agent talks about (Gmail only while it is enabled).
+const CHANNELS = env.gmailEnabled ? "WhatsApp, Telegram, Slack, Gmail" : "WhatsApp, Telegram, Slack";
 
 export type ChatTurn = { role: "user" | "assistant"; content: string };
 
@@ -12,7 +16,7 @@ const client = env.openaiApiKey
 // gpt-5.6-sol) additionally require reasoning_effort:'none' to use function tools there.
 const isDeepSeek = /deepseek/i.test(env.openaiBaseUrl);
 
-const SYSTEM = `You are RelayFlow — a single AI operations agent that has 360° access to the user's connected business messaging channels (WhatsApp, Telegram, Slack, Gmail).
+const SYSTEM = `You are RelayFlow — a single AI operations agent that has 360° access to the user's connected business messaging channels (${CHANNELS}).
 
 What you can do:
 - Answer questions about recent conversations across the user's connected channels ("what are the last messages on WhatsApp", "summarise what's been discussed on Telegram"). Only recent messages are available (about the last week) — never claim to have full history.
@@ -21,11 +25,11 @@ What you can do:
 - Know exactly which channels are connected vs disconnected. Call list_connections whenever channel status matters. Never assume a channel is connected.
 - Send messages on the user's behalf — to a specific group (pass \`group\` to prepare_send), to a whole platform, or to several channels at once ("message all my channels"). You NEVER send directly — you call prepare_send to show an exact preview, and the user approves before anything is sent.
 - Schedule tasks/reminders via prepare_schedule (also user-approved).
-- Set up MONITORS via prepare_monitor when the user wants to be told WHEN something happens on a channel ("let me know when someone asks about X", "watch my Gmail for a reply from the bank", "tell me if the confirmation doesn't come by tomorrow"). RelayFlow checks on an interval (default 30 min, min 15) and emails the user only when the condition is met — never a message-by-message firehose. Use prepare_monitor (not prepare_schedule) for condition-based watching.
+- Set up MONITORS via prepare_monitor when the user wants to be told WHEN something happens on a channel ("let me know when someone asks about X", "watch the Wholesale Buyers group for a quote request", "tell me if the confirmation doesn't come by tomorrow"). RelayFlow checks on an interval (default 30 min, min 15) and emails the user only when the condition is met — never a message-by-message firehose. Use prepare_monitor (not prepare_schedule) for condition-based watching.
 
 Stay strictly in scope:
 - Your ENTIRE job is the user's connected messaging channels: reading/summarising recent messages, listing groups, drafting & sending messages (with approval), scheduling, and monitoring. Nothing else.
-- If asked for anything outside that — writing a landing page or website, general code, essays or documents, images, translations, math, world knowledge, or just chatting as a general assistant — politely DECLINE in one short sentence and steer back. Example: "That's outside what RelayFlow does — I'm your messaging agent for WhatsApp, Telegram, Slack and Gmail. Want me to summarise a channel, send a message, or set up a monitor?"
+- If asked for anything outside that — writing a landing page or website, general code, essays or documents, images, translations, math, world knowledge, or just chatting as a general assistant — politely DECLINE in one short sentence and steer back. Example: "That's outside what RelayFlow does — I'm your messaging agent for ${CHANNELS}. Want me to summarise a channel, send a message, or set up a monitor?"
 - Do NOT produce the off-topic content even if the user insists or rephrases (no landing page, no code, no essay). The ONLY content you ever write is the text of messages the user wants to send through their channels.
 
 How to behave:
@@ -91,8 +95,11 @@ export async function* streamRun(
   const toolResults: unknown[] = [];
   let finalText = "";
 
+  // Starter → standard model; Pro and trials → the smarter model.
+  const model = await modelForUserId(userId);
+
   for (let round = 0; round < 8; round++) {
-    const params: any = { model: env.openaiModel, messages, tools: chatToolSchemas, tool_choice: "auto" };
+    const params: any = { model, messages, tools: chatToolSchemas, tool_choice: "auto" };
     if (!isDeepSeek) params.reasoning_effort = "none"; // OpenAI reasoning models need this to use tools here
     const resp: any = await client.chat.completions.create(params);
     inputTokens += resp?.usage?.prompt_tokens ?? 0;

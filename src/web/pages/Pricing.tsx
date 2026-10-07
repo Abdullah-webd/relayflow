@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Check, ShieldCheck, Loader2, CircleAlert, Info, ArrowRight } from "lucide-react";
+import { Check, ShieldCheck, Loader2, CircleAlert, CircleCheck, Info } from "lucide-react";
 import { Logo } from "../components/Logo";
 import { useAuth, hasActivePlan } from "../lib/auth";
 import { api } from "../lib/api";
-import { PRICE_USD } from "../lib/pricing";
+
+type PlanKey = "starter" | "pro";
 
 interface PlanView {
-  key: "pro";
+  key: PlanKey;
   name: string;
   blurb: string;
   priceUsd: number;
@@ -15,7 +16,7 @@ interface PlanView {
   popular: boolean;
 }
 
-function hoursLeft(iso: string | null): string {
+function timeLeft(iso: string | null): string {
   if (!iso) return "";
   const mins = Math.max(0, Math.floor((new Date(iso).getTime() - Date.now()) / 60_000));
   const h = Math.floor(mins / 60);
@@ -30,6 +31,7 @@ export default function Pricing() {
   const [trialDays, setTrialDays] = useState(1);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [finishing, setFinishing] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -64,21 +66,41 @@ export default function Pricing() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, sessionId]);
 
-  async function choose(planKey: string) {
+  const subscribed = user?.subscriptionStatus === "active";
+  const currentPlan: PlanKey | null = subscribed ? (user?.plan === "starter" ? "starter" : "pro") : null;
+
+  async function subscribe(planKey: PlanKey) {
     setError("");
+    setNotice("");
     if (!user) {
       nav(`/signup?plan=${planKey}`);
       return;
     }
     setBusy(planKey);
     try {
-      const { url } = await api<{ url: string }>("/billing/checkout", {
-        method: "POST",
-        body: JSON.stringify({ plan: planKey }),
-      });
+      const { url } = await api<{ url: string }>("/billing/checkout", { method: "POST", body: JSON.stringify({ plan: planKey }) });
       window.location.href = url;
     } catch (e: any) {
       setError(e?.data?.detail || e?.message || "Couldn’t start checkout. Please try again.");
+      setBusy(null);
+    }
+  }
+
+  async function switchPlan(planKey: PlanKey) {
+    setError("");
+    setNotice("");
+    setBusy(planKey);
+    try {
+      await api("/billing/change-plan", { method: "POST", body: JSON.stringify({ plan: planKey }) });
+      await refresh();
+      setNotice(
+        planKey === "pro"
+          ? "You’re on Pro now. The price difference for this month was charged to your card."
+          : "You’re on Starter now. The unused part of Pro is credited to your next bill.",
+      );
+    } catch (e: any) {
+      setError(e?.data?.detail || e?.message || "Couldn’t change your plan. Please try again.");
+    } finally {
       setBusy(null);
     }
   }
@@ -94,61 +116,52 @@ export default function Pricing() {
     );
   }
 
-  const plan = plans[0];
-  const price = plan?.priceUsd ?? PRICE_USD;
-
-  // Which situation is the visitor in?
   const s = user?.subscriptionStatus;
-  const mode: "visitor" | "trialing" | "subscribed" | "expired" | "subscribe" = !user
-    ? "visitor"
-    : s === "active"
-      ? "subscribed"
+  const heading = !user
+    ? { title: "Simple plans for every team.", body: `Start with a ${trialDays}-day free trial of every Pro feature. No credit card required.` }
+    : subscribed
+      ? { title: "Your plan", body: "Switch between Starter and Pro anytime. Stripe adjusts the price for the rest of your month automatically." }
       : s === "trialing" && hasActivePlan(user)
-        ? "trialing"
+        ? { title: "You’re on the free trial.", body: `${timeLeft(user?.trialEndsAt ?? null)} left with every Pro feature. Pick the plan to keep when it ends.` }
         : s === "trial_expired"
-          ? "expired"
-          : "subscribe";
+          ? { title: "Your free trial has ended.", body: "Choose a plan to keep using RelayFlow. Your channels, chats and settings are saved." }
+          : { title: "Choose a plan to use RelayFlow.", body: "Your channels, chats and settings are saved. Pick a plan to pick up where you left off." };
 
-  const copy = {
-    visitor: {
-      title: "One plan. Everything included.",
-      body: `Try everything free for ${trialDays} day. No credit card required. Then $${price} a month if you want to keep going.`,
-      steps: [
-        { t: "Today", d: `Sign up and your ${trialDays}-day free trial starts. No card needed.` },
-        { t: "When the trial ends", d: `Subscribe for $${price}/month to keep going. If you don’t, your account simply pauses. Nothing is charged.` },
-        { t: "Anytime", d: "Cancel from Settings whenever you like. No contracts." },
-      ],
-    },
-    trialing: {
-      title: "You’re on the free trial.",
-      body: `${hoursLeft(user?.trialEndsAt ?? null)} left. Subscribe now to keep access when your trial ends.`,
-      steps: [],
-    },
-    subscribed: {
-      title: "You’re subscribed.",
-      body: "Thanks for using RelayFlow Pro. Manage your plan and invoices from Settings.",
-      steps: [],
-    },
-    expired: {
-      title: "Your free trial has ended.",
-      body: "Subscribe to keep using RelayFlow. Your channels, chats and settings are saved and waiting for you.",
-      steps: [],
-    },
-    subscribe: {
-      title: "Subscribe to use RelayFlow.",
-      body: "Your channels, chats and settings are saved. Subscribe to pick up where you left off.",
-      steps: [],
-    },
-  }[mode];
-
-  const paySteps = [
-    { t: "Today", d: `You’re charged $${price} and get full access right away.` },
-    { t: "Every month", d: `Renews at $${price}/month until you cancel.` },
-    { t: "Anytime", d: "Cancel from Settings whenever you like. No contracts." },
-  ];
-  const steps = copy.steps.length ? copy.steps : mode === "subscribed" ? [] : paySteps;
-
-  const ctaLabel = mode === "visitor" ? "Start free trial" : `Subscribe · $${price}/month`;
+  function cta(p: PlanView) {
+    const isBusy = busy === p.key;
+    const spinner = (label: string) => (
+      <>
+        <Loader2 className="animate-spin" size={16} /> {label}
+      </>
+    );
+    const cls = `mt-8 h-11 w-full text-[15px] ${p.popular ? "btn-primary" : "btn-ghost"}`;
+    if (!user) {
+      return (
+        <button onClick={() => subscribe(p.key)} className={cls}>
+          Start free trial
+        </button>
+      );
+    }
+    if (subscribed) {
+      if (currentPlan === p.key) {
+        return (
+          <div className="mt-8 h-11 w-full rounded-lg border border-line bg-surface text-[14px] font-medium text-ink-600 grid place-items-center">
+            Current plan
+          </div>
+        );
+      }
+      return (
+        <button onClick={() => switchPlan(p.key)} disabled={!!busy} className={cls}>
+          {isBusy ? spinner("Switching…") : p.key === "pro" ? "Upgrade to Pro" : "Switch to Starter"}
+        </button>
+      );
+    }
+    return (
+      <button onClick={() => subscribe(p.key)} disabled={!!busy} className={cls}>
+        {isBusy ? spinner("Opening secure checkout…") : `Subscribe to ${p.name}`}
+      </button>
+    );
+  }
 
   return (
     <div className="min-h-full bg-white text-ink-800 flex flex-col">
@@ -179,108 +192,92 @@ export default function Pricing() {
         </div>
       </header>
 
-      <main className="flex-1 mx-auto w-full max-w-container px-5 sm:px-6 py-16 sm:py-24">
-        <div className="grid lg:grid-cols-12 gap-12 items-start">
-          <div className="lg:col-span-5 rf-in">
-            <h1 className="text-display-sm sm:text-display-md font-semibold text-ink-900">{copy.title}</h1>
-            <p className="mt-4 text-lead text-ink-600">{copy.body}</p>
-
-            {steps.length > 0 && (
-              <dl className="mt-10 space-y-5">
-                {steps.map((row) => (
-                  <div key={row.t} className="flex gap-4">
-                    <span className="mt-2 h-1.5 w-1.5 rounded-full bg-brand-400 shrink-0" />
-                    <div>
-                      <dt className="text-[14px] font-medium text-ink-900">{row.t}</dt>
-                      <dd className="mt-0.5 text-[14px] leading-relaxed text-ink-600">{row.d}</dd>
-                    </div>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </div>
-
-          <div className="lg:col-span-6 lg:col-start-7 rf-in" style={{ ["--i" as string]: 1 }}>
-            {status === "cancel" && (
-              <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-line bg-surface px-4 py-3 text-[14px] text-ink-700" role="status">
-                <Info size={16} className="mt-0.5 shrink-0 text-ink-500" />
-                Checkout was canceled. Nothing was charged.
-              </div>
-            )}
-            {error && (
-              <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700" role="alert">
-                <CircleAlert size={16} className="mt-0.5 shrink-0" />
-                {error}
-              </div>
-            )}
-
-            <div className="rounded-3xl border border-line bg-white p-7 sm:p-9 shadow-md">
-              {plan ? (
-                <>
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-[16px] font-medium text-ink-900">{plan.name}</h2>
-                    <span className="rounded-full bg-brand-50 text-brand-700 px-2.5 h-6 inline-flex items-center text-[12px] font-medium">
-                      {mode === "visitor" ? `${trialDays}-day free trial` : mode === "subscribed" ? "Active" : "Monthly"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[14px] text-ink-500">{plan.blurb}</p>
-                  <div className="mt-6 flex items-baseline gap-1.5">
-                    <span className="text-display-lg font-semibold text-ink-900 tabular-nums">${plan.priceUsd}</span>
-                    <span className="text-[15px] text-ink-500">/month</span>
-                  </div>
-                  <ul className="mt-8 grid sm:grid-cols-2 gap-x-6 gap-y-3">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2.5 text-[14px] text-ink-700">
-                        <Check size={16} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-600" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  {mode === "subscribed" ? (
-                    <Link to="/app" className="btn-primary mt-9 h-11 w-full text-[15px]">
-                      Go to the app <ArrowRight size={16} />
-                    </Link>
-                  ) : (
-                    <button onClick={() => choose(plan.key)} disabled={busy === plan.key} className="btn-primary mt-9 h-11 w-full text-[15px]">
-                      {busy === plan.key ? (
-                        <>
-                          <Loader2 className="animate-spin" size={16} /> Opening secure checkout…
-                        </>
-                      ) : (
-                        ctaLabel
-                      )}
-                    </button>
-                  )}
-                </>
-              ) : loadFailed ? (
-                <div className="py-10 text-center" role="alert">
-                  <p className="text-[15px] font-medium text-ink-900">Couldn’t load pricing.</p>
-                  <p className="mt-1 text-[14px] text-ink-600">Check your connection and try again.</p>
-                  <button onClick={() => window.location.reload()} className="btn-ghost mt-5 h-9 px-4">
-                    Try again
-                  </button>
-                </div>
-              ) : (
-                // Skeleton that mirrors the card while the plan loads.
-                <div className="animate-pulse" aria-hidden>
-                  <div className="h-4 w-16 rounded bg-surface" />
-                  <div className="mt-8 h-12 w-32 rounded bg-surface" />
-                  <div className="mt-8 grid sm:grid-cols-2 gap-3">
-                    {Array.from({ length: 6 }).map((_, n) => (
-                      <div key={n} className="h-4 rounded bg-surface" />
-                    ))}
-                  </div>
-                  <div className="mt-9 h-11 rounded-lg bg-surface" />
-                </div>
-              )}
-            </div>
-
-            <p className="mt-4 flex items-center justify-center gap-2 text-[13px] text-ink-500">
-              <ShieldCheck size={14} className="text-ink-400" />
-              {mode === "visitor" ? "No credit card required · Cancel anytime" : "Secure checkout by Stripe · Cancel anytime"}
-            </p>
-          </div>
+      <main className="flex-1 mx-auto w-full max-w-container px-5 sm:px-6 py-16 sm:py-20">
+        <div className="max-w-2xl mx-auto text-center rf-in">
+          <h1 className="text-display-sm sm:text-display-md font-semibold text-ink-900">{heading.title}</h1>
+          <p className="mt-4 text-lead text-ink-600">{heading.body}</p>
         </div>
+
+        <div className="mt-10 max-w-4xl mx-auto space-y-3">
+          {status === "cancel" && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-line bg-surface px-4 py-3 text-[14px] text-ink-700" role="status">
+              <Info size={16} className="mt-0.5 shrink-0 text-ink-500" />
+              Checkout was canceled. Nothing was charged.
+            </div>
+          )}
+          {notice && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[14px] text-emerald-800" role="status">
+              <CircleCheck size={16} className="mt-0.5 shrink-0" />
+              {notice}
+            </div>
+          )}
+          {error && (
+            <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[14px] text-red-700" role="alert">
+              <CircleAlert size={16} className="mt-0.5 shrink-0" />
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 grid md:grid-cols-2 gap-5 max-w-4xl mx-auto rf-in" style={{ ["--i" as string]: 1 }}>
+          {plans.length ? (
+            plans.map((p) => (
+              <div
+                key={p.key}
+                className={`relative flex flex-col rounded-3xl bg-white p-7 sm:p-8 ${
+                  p.popular ? "border-2 border-brand-600 shadow-md" : "border border-line"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[17px] font-semibold text-ink-900">{p.name}</h2>
+                  {p.popular && (
+                    <span className="rounded-full bg-brand-600 text-white px-2.5 h-6 inline-flex items-center text-[12px] font-medium">Most popular</span>
+                  )}
+                </div>
+                <p className="mt-1 text-[14px] text-ink-500">{p.blurb}</p>
+                <div className="mt-6 flex items-baseline gap-1.5">
+                  <span className="text-display-lg font-semibold text-ink-900 tabular-nums">${p.priceUsd}</span>
+                  <span className="text-[15px] text-ink-500">/month</span>
+                </div>
+                <ul className="mt-7 space-y-3 flex-1">
+                  {p.features.map((f) => (
+                    <li key={f} className="flex items-start gap-2.5 text-[14px] text-ink-700">
+                      <Check size={16} strokeWidth={2.25} className="mt-0.5 shrink-0 text-brand-600" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                {cta(p)}
+              </div>
+            ))
+          ) : loadFailed ? (
+            <div className="md:col-span-2 py-10 text-center rounded-3xl border border-line" role="alert">
+              <p className="text-[15px] font-medium text-ink-900">Couldn’t load pricing.</p>
+              <p className="mt-1 text-[14px] text-ink-600">Check your connection and try again.</p>
+              <button onClick={() => window.location.reload()} className="btn-ghost mt-5 h-9 px-4">
+                Try again
+              </button>
+            </div>
+          ) : (
+            [0, 1].map((n) => (
+              <div key={n} className="rounded-3xl border border-line p-8 animate-pulse" aria-hidden>
+                <div className="h-4 w-20 rounded bg-surface" />
+                <div className="mt-8 h-12 w-28 rounded bg-surface" />
+                <div className="mt-8 space-y-3">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="h-4 rounded bg-surface" />
+                  ))}
+                </div>
+                <div className="mt-8 h-11 rounded-lg bg-surface" />
+              </div>
+            ))
+          )}
+        </div>
+
+        <p className="mt-6 flex items-center justify-center gap-2 text-[13px] text-ink-500">
+          <ShieldCheck size={14} className="text-ink-400" />
+          {!user ? "Free trial includes every Pro feature · No credit card required · Cancel anytime" : "Secure checkout by Stripe · Switch or cancel anytime"}
+        </p>
       </main>
     </div>
   );

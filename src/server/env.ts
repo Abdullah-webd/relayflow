@@ -30,9 +30,18 @@ export const env = {
   mongoDb: str("MONGODB_DB_NAME", "relayflow_v2"),
 
   openaiApiKey: str("OPENAI_API_KEY"),
-  openaiModel: str("OPENAI_MODEL", "gpt-4o"),
+  openaiModel: str("OPENAI_MODEL", "gpt-4o"), // the "advanced" model (Pro plan)
   // Optional OpenAI-compatible base URL (e.g. DeepSeek) — lets us swap providers by config.
   openaiBaseUrl: str("OPENAI_BASE_URL"),
+  // The "standard" model (Starter plan). Defaults to DeepSeek's fast model when on DeepSeek,
+  // otherwise falls back to the advanced model.
+  get openaiModelStandard(): string {
+    return str("OPENAI_MODEL_STANDARD") || (/deepseek/i.test(this.openaiBaseUrl) ? "deepseek-flash" : this.openaiModel);
+  },
+
+  // Gmail is switched off until the Google app passes verification (restricted Gmail scopes).
+  // Set GMAIL_ENABLED=true to bring it back; the connector code is kept intact.
+  gmailEnabled: str("GMAIL_ENABLED").toLowerCase() === "true",
 
   resendApiKey: str("RESEND_API_KEY"),
   resendFrom: str("RESEND_FROM_EMAIL", "RelayFlow <onboarding@resend.dev>"),

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { scheduledTasks, users } from "../db";
 import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
+import { checkQuota, planLimitMessage } from "../billing/access";
 
 export async function taskRoutes(app: FastifyInstance) {
   app.get("/tasks", { preHandler: requireActivePlan }, async (req) => {
@@ -33,6 +34,9 @@ export async function taskRoutes(app: FastifyInstance) {
     if (!body.success) return reply.code(400).send({ error: "invalid_input", detail: body.error.issues[0]?.message });
     const runAt = new Date(body.data.runAt);
     if (Number.isNaN(runAt.getTime())) return reply.code(400).send({ error: "invalid_input", detail: "Invalid run time." });
+    // Plan limit (Starter: 5 active scheduled tasks).
+    const quota = await checkQuota(req.userId!, "scheduledTasks");
+    if (!quota.ok) return reply.code(403).send({ error: "plan_limit", detail: planLimitMessage("scheduledTasks", quota.limit) });
     const user = await users().findOne({ _id: req.userId! });
     const now = new Date();
     const task = {
@@ -57,6 +61,13 @@ export async function taskRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = z.object({ active: z.boolean() }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input" });
+    if (body.data.active) {
+      const current = await scheduledTasks().findOne({ _id: id, userId: req.userId! });
+      if (current && !current.active) {
+        const quota = await checkQuota(req.userId!, "scheduledTasks");
+        if (!quota.ok) return reply.code(403).send({ error: "plan_limit", detail: planLimitMessage("scheduledTasks", quota.limit) });
+      }
+    }
     await scheduledTasks().updateOne({ _id: id, userId: req.userId! }, { $set: { active: body.data.active, updatedAt: new Date() } });
     return { status: "ok" };
   });

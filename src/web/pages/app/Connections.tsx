@@ -22,7 +22,6 @@ const PLATFORMS = [
   { key: "whatsapp", name: "WhatsApp", color: "#25D366", copy: "Scan a QR from WhatsApp → Linked devices. Reads your group messages." },
   { key: "telegram", name: "Telegram", color: "#229ED9", copy: "Sign in with your phone number. Groups and channels." },
   { key: "slack", name: "Slack", color: "#611f69", copy: "Authorize with Slack. Your channels and messages." },
-  { key: "gmail", name: "Gmail", color: "#EA4335", copy: "Authorize Gmail. Recent inbox for analysis and sending." },
 ];
 
 const STATUS: Record<string, { label: string; cls: string }> = {

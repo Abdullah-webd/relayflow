@@ -4,6 +4,7 @@ import { knowledgeBase, knowledgeDocs, autoReplies, connections, destinations } 
 import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
 import { setGuardrails } from "../knowledge/knowledge";
+import { requireProFeature } from "../billing/access";
 
 export async function knowledgeRoutes(app: FastifyInstance) {
   // Everything the Knowledge tab needs in one call.
@@ -45,7 +46,7 @@ export async function knowledgeRoutes(app: FastifyInstance) {
   });
 
   // Add a knowledge document — typed text, or a base64-encoded PDF we extract text from.
-  app.post("/knowledge/docs", { preHandler: requireActivePlan }, async (req, reply) => {
+  app.post("/knowledge/docs", { preHandler: [requireActivePlan, requireProFeature] }, async (req, reply) => {
     const parsed = z
       .object({
         title: z.string().min(1).max(160),
@@ -89,6 +90,11 @@ export async function knowledgeRoutes(app: FastifyInstance) {
   app.patch("/knowledge/auto-reply", { preHandler: requireActivePlan }, async (req, reply) => {
     const parsed = z.object({ destinationId: z.string(), enabled: z.boolean() }).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+    // Turning auto-reply ON is Pro-only; turning it off is always allowed.
+    if (parsed.data.enabled) {
+      await requireProFeature(req, reply);
+      if (reply.sent) return reply;
+    }
     const set: Record<string, unknown> = {
       autoReplyEnabled: parsed.data.enabled,
       // Reset the watermark to "now" when enabling, so we only answer messages from here on.

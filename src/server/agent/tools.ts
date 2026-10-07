@@ -1,5 +1,7 @@
 import { getRecentMessages, listUserConnections, listDestinations, resolveSendTargets } from "../connectors/manager";
 import type { Platform } from "../db";
+import { env } from "../env";
+import { checkQuota, planLimitMessage } from "../billing/access";
 
 export interface ToolDef {
   name: string;
@@ -8,7 +10,8 @@ export interface ToolDef {
   handler: (userId: string, args: any) => Promise<unknown>;
 }
 
-const PLATFORMS: Platform[] = ["whatsapp", "telegram", "slack", "gmail"];
+// Gmail is hidden while GMAIL_ENABLED is off (Google app not yet verified).
+const PLATFORMS: Platform[] = env.gmailEnabled ? ["whatsapp", "telegram", "slack", "gmail"] : ["whatsapp", "telegram", "slack"];
 
 export const tools: ToolDef[] = [
   {
@@ -123,7 +126,10 @@ export const tools: ToolDef[] = [
       required: ["title", "instruction", "schedule", "run_at"],
       additionalProperties: false,
     },
-    handler: async (_userId, args) => ({
+    handler: async (userId, args) => {
+      const quota = await checkQuota(userId, "scheduledTasks");
+      if (!quota.ok) return { status: "error", error: "plan_limit", message: planLimitMessage("scheduledTasks", quota.limit) };
+      return {
       status: "pending_confirmation",
       action: "schedule",
       title: args.title,
@@ -131,12 +137,13 @@ export const tools: ToolDef[] = [
       schedule: args.schedule,
       run_at: args.run_at,
       note: "Awaiting the user's approval before scheduling.",
-    }),
+      };
+    },
   },
   {
     name: "prepare_monitor",
     description:
-      "Prepare a MONITOR the user must approve. Use this when the user asks to WATCH a channel and be told when something happens — e.g. 'let me know when someone asks about pricing in the Dev group', 'watch my Gmail for a reply from the bank', 'tell me if the delivery confirmation doesn't arrive by tomorrow'. RelayFlow checks on an interval (default 30 min, minimum 15) and emails the user ONLY when the condition is met — it does NOT notify on every message. Prefer this over prepare_schedule whenever the user wants ongoing watching/notifying based on a condition rather than a fixed-time action.",
+      "Prepare a MONITOR the user must approve. Use this when the user asks to WATCH a channel and be told when something happens — e.g. 'let me know when someone asks about pricing in the Dev group', 'watch the Wholesale Buyers group for a quote request', 'tell me if the delivery confirmation doesn't arrive by tomorrow'. RelayFlow checks on an interval (default 30 min, minimum 15) and emails the user ONLY when the condition is met — it does NOT notify on every message. Prefer this over prepare_schedule whenever the user wants ongoing watching/notifying based on a condition rather than a fixed-time action.",
     parameters: {
       type: "object",
       properties: {
@@ -155,7 +162,10 @@ export const tools: ToolDef[] = [
       required: ["title", "platform", "group", "condition", "mode", "interval_minutes", "absence_hours"],
       additionalProperties: false,
     },
-    handler: async (_userId, args) => ({
+    handler: async (userId, args) => {
+      const quota = await checkQuota(userId, "monitors");
+      if (!quota.ok) return { status: "error", error: "plan_limit", message: planLimitMessage("monitors", quota.limit) };
+      return {
       status: "pending_confirmation",
       action: "monitor",
       title: args.title,
@@ -166,7 +176,8 @@ export const tools: ToolDef[] = [
       interval_minutes: Math.max(15, Number(args.interval_minutes) || 30),
       absence_hours: args.mode === "absence" ? args.absence_hours ?? 24 : null,
       note: "Awaiting the user's approval before starting the monitor.",
-    }),
+      };
+    },
   },
 ];
 

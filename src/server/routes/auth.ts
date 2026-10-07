@@ -6,7 +6,7 @@ import { env } from "../env";
 import { randomOtp, sha256, uid } from "../lib/crypto";
 import { sendEmail, brandedEmail } from "../lib/email";
 import { effectiveStatus } from "../billing/plans";
-import { startTrialIfEligible, userCanUse } from "../billing/access";
+import { startTrialIfEligible, userCanUse, planFor } from "../billing/access";
 import { TERMS_VERSION } from "../legal";
 import { createSession, destroyAllSessions, destroySession } from "../auth/session";
 import {
@@ -25,7 +25,7 @@ function publicUser(user: User) {
     name: user.name ?? "",
     emailVerified: user.emailVerified,
     timezone: user.timezone,
-    plan: user.plan ?? null,
+    plan: planFor(user), // trials get Pro; subscribers get what they pay for
     subscriptionStatus: effectiveStatus(user),
     trialEndsAt: user.trialEndsAt ?? null,
     hasAccess: userCanUse(user),

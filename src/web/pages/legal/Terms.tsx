@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { LegalLayout, Section, List, OPERATOR, CONTACT_PHONE, CONTACT_TEL } from "./LegalLayout";
-import { PRICE_USD } from "../../lib/pricing";
+import { PRICES } from "../../lib/pricing";
 
 const toc = [
   { id: "agreement", label: "Agreement" },
@@ -52,7 +52,7 @@ export default function Terms() {
 
       <Section id="service" title="The service">
         <p>
-          RelayFlow is an AI agent that connects to your WhatsApp, Telegram, Slack and Gmail accounts. It can read and summarize recent
+          RelayFlow is an AI agent that connects to your WhatsApp, Telegram and Slack accounts. It can read and summarize recent
           messages, draft and send messages you approve, run scheduled tasks, watch for things with monitors, and send auto-replies from your
           knowledge base on the groups where you enable them.
         </p>
@@ -64,8 +64,8 @@ export default function Terms() {
 
       <Section id="channels" title="Connected channels">
         <p>
-          WhatsApp, Telegram, Slack and Gmail are third-party services with their own terms, which you must follow. RelayFlow isn’t affiliated
-          with or endorsed by Meta, WhatsApp, Telegram, Slack or Google.
+          WhatsApp, Telegram and Slack are third-party services with their own terms, which you must follow. RelayFlow isn’t affiliated
+          with or endorsed by Meta, WhatsApp, Telegram or Slack.
         </p>
         <p>
           RelayFlow connects to WhatsApp as a linked device, the way WhatsApp Web does, and signs in to Telegram with your account. These
@@ -92,8 +92,9 @@ export default function Terms() {
       <Section id="billing" title="Free trial and billing">
         <List
           items={[
-            "New accounts get one free trial of 1 day, starting when you verify your email. No payment details are needed for the trial. When it ends, access pauses until you subscribe.",
-            `RelayFlow Pro costs US$${PRICE_USD} per month, charged in advance through Stripe when you subscribe and on the same date each month after.`,
+            "New accounts get one free trial of 1 day with Pro features, starting when you verify your email. No payment details are needed for the trial. When it ends, access pauses until you subscribe.",
+            `RelayFlow has two plans: Starter at US$${PRICES.starter} per month and Pro at US$${PRICES.pro} per month, charged in advance through Stripe when you subscribe and on the same date each month after. The features and limits of each plan are shown on our pricing page.`,
+            "You can switch plans at any time. Upgrades are charged immediately for the rest of the current month; downgrades are credited against your next bill. On Starter, monitors and scheduled tasks beyond the plan’s limits are paused.",
             "Your subscription renews automatically each month until you cancel. You can cancel anytime in Settings. Cancellation takes effect at the end of the current billing period, and you keep access until then.",
             "Payments are non-refundable, including for partial months, except where the law requires otherwise.",
             "Prices exclude any taxes that may apply. If we change the price, we’ll tell you at least 30 days before it affects your next renewal.",

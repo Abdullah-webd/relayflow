@@ -1,7 +1,7 @@
-// Plan catalogue. RelayFlow has a single subscription: one price, full access, no
-// usage credits. The Stripe Price is created on demand (see stripe.ts) keyed by the
-// stable lookup key below, so we never hard-code Stripe price IDs.
-export type PlanKey = "pro";
+// Plan catalogue: Starter ($15) and Pro ($30). Stripe Prices are created on demand (see
+// stripe.ts) keyed by the stable lookup keys below, so we never hard-code Stripe price IDs.
+// Stripe prices are immutable: changing an amount needs a NEW lookup key.
+export type PlanKey = "starter" | "pro";
 
 export interface Plan {
   key: PlanKey;
@@ -15,30 +15,57 @@ export interface Plan {
 }
 
 export const PLANS: Record<PlanKey, Plan> = {
+  starter: {
+    key: "starter",
+    name: "Starter",
+    blurb: "Run your channels from one AI chat",
+    priceUsd: 15,
+    amountCents: 1500,
+    lookupKey: "rf_starter_monthly_v2", // v1 was an old $10 test price
+    features: [
+      "WhatsApp, Telegram and Slack",
+      "Ask, summarize and search your chats",
+      "Send to one group or all channels",
+      "Approve-before-send on every message",
+      "Up to 5 scheduled tasks",
+      "Up to 3 monitors",
+    ],
+  },
   pro: {
     key: "pro",
     name: "Pro",
-    blurb: "Everything RelayFlow does, one simple price",
+    blurb: "Smarter AI that also replies for you",
     priceUsd: 30,
     amountCents: 3000,
-    // Stripe prices are immutable: a new amount needs a new lookup key (v1 was $15).
-    lookupKey: "rf_pro_monthly_v2",
+    lookupKey: "rf_pro_monthly_v2", // v1 was $15
     popular: true,
     features: [
-      "Unlimited AI actions — no usage credits",
-      "All 4 channels (WhatsApp, Telegram, Slack, Gmail)",
-      "Approve-before-send on every message",
-      "Scheduled tasks & smart monitors",
+      "Everything in Starter",
+      "Smarter AI model for more accurate answers",
       "Auto-replies from your knowledge base",
-      "Multiple chat sessions",
+      "Unlimited scheduled tasks",
+      "Unlimited monitors",
     ],
   },
 };
 
-// The single plan every subscription uses.
+// What each plan can do. Infinity = unlimited.
+export interface PlanLimits {
+  monitors: number;
+  scheduledTasks: number;
+  autoReply: boolean; // knowledge base + auto-replies
+  model: "standard" | "advanced";
+}
+
+export const PLAN_LIMITS: Record<PlanKey, PlanLimits> = {
+  starter: { monitors: 3, scheduledTasks: 5, autoReply: false, model: "standard" },
+  pro: { monitors: Infinity, scheduledTasks: Infinity, autoReply: true, model: "advanced" },
+};
+
+// Fallback when a subscription's price can't be mapped (legacy data).
 export const DEFAULT_PLAN: PlanKey = "pro";
 
-export const PLAN_LIST: Plan[] = [PLANS.pro];
+export const PLAN_LIST: Plan[] = [PLANS.starter, PLANS.pro];
 
 export const TRIAL_DAYS = 1;
 
@@ -58,6 +85,7 @@ export interface AccessFields {
   subscriptionStatus?: string | null;
   trialSource?: string | null;
   trialEndsAt?: Date | string | null;
+  plan?: string | null;
 }
 
 // Every trial ends at trialEndsAt, whatever started it. (Leftover Stripe test-mode trials
@@ -77,4 +105,14 @@ export function hasAccess(u: AccessFields, now = new Date()): boolean {
 export function effectiveStatus(u: AccessFields, now = new Date()): string {
   if (trialExpired(u, now)) return "trial_expired";
   return u.subscriptionStatus ?? "none";
+}
+
+/** Which plan's features apply. The free trial gets Pro; subscribers get what they pay for. */
+export function effectivePlan(u: AccessFields): PlanKey {
+  if (u.subscriptionStatus === "trialing") return "pro";
+  return u.plan === "starter" ? "starter" : "pro";
+}
+
+export function limitsFor(u: AccessFields): PlanLimits {
+  return PLAN_LIMITS[effectivePlan(u)];
 }

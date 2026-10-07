@@ -5,12 +5,16 @@ import { sendToTargets, type SendTarget } from "./connectors/manager";
 import { sendEmail } from "./lib/email";
 import { runDueMonitors } from "./monitors";
 import { runAutoReplyTick } from "./knowledge/autoReplyPoller";
-import { userHasAccessById } from "./billing/access";
+import { userHasAccessById, withinQuota } from "./billing/access";
 
 async function runTask(task: ScheduledTask): Promise<void> {
   // Paywall guardrail: no trial/subscription means the agent does no work for this account.
-  if (!(await userHasAccessById(task.userId))) {
-    const paused: Record<string, unknown> = { lastResult: "Paused: subscription required", updatedAt: new Date() };
+  // Plan guardrail: after a downgrade to Starter only the oldest 5 active tasks run.
+  const access = await userHasAccessById(task.userId);
+  const inQuota = access && (await withinQuota(task.userId, "scheduledTasks", task._id));
+  if (!access || !inQuota) {
+    const reason = access ? "Paused: over the Starter plan limit (upgrade to Pro for unlimited)" : "Paused: subscription required";
+    const paused: Record<string, unknown> = { lastResult: reason, updatedAt: new Date() };
     if (task.schedule === "once") {
       paused.runAt = new Date(Date.now() + 60 * 60 * 1000); // keep it pending; retry hourly
     } else {

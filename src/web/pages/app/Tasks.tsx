@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../../lib/api";
+import { Link } from "react-router-dom";
 import { Clock, Trash2, Plus, Eye } from "lucide-react";
 
 interface Task {
@@ -33,6 +34,8 @@ export default function Tasks() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ title: "", instruction: "", schedule: "daily", runAt: "" });
   const [err, setErr] = useState<string | null>(null);
+  // Page-level notice (e.g. a Starter plan limit when re-activating a paused item).
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = async () => setTasks((await api<{ tasks: Task[] }>("/tasks")).tasks);
   const loadMonitors = async () => setMonitors((await api<{ monitors: Monitor[] }>("/monitors")).monitors);
@@ -42,7 +45,12 @@ export default function Tasks() {
   }, []);
 
   async function toggleMonitor(m: Monitor) {
-    await api(`/monitors/${m.id}`, { method: "PATCH", body: JSON.stringify({ active: !m.active }) });
+    setNotice(null);
+    try {
+      await api(`/monitors/${m.id}`, { method: "PATCH", body: JSON.stringify({ active: !m.active }) });
+    } catch (e) {
+      setNotice((e as Error).message);
+    }
     loadMonitors();
   }
   async function removeMonitor(id: string) {
@@ -64,7 +72,12 @@ export default function Tasks() {
   }
 
   async function toggle(t: Task) {
-    await api(`/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ active: !t.active }) });
+    setNotice(null);
+    try {
+      await api(`/tasks/${t.id}`, { method: "PATCH", body: JSON.stringify({ active: !t.active }) });
+    } catch (e) {
+      setNotice((e as Error).message);
+    }
     load();
   }
   async function remove(id: string) {
@@ -84,6 +97,16 @@ export default function Tasks() {
             <Plus size={16} /> New task
           </button>
         </div>
+        {notice && (
+          <div role="alert" className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">
+            <span>{notice}</span>
+            {/Pro/.test(notice) && (
+              <Link to="/pricing" className="font-medium text-brand-700 hover:text-brand-800 underline underline-offset-2">
+                See plans
+              </Link>
+            )}
+          </div>
+        )}
 
         <div className="mt-3 rounded-xl bg-brand-50 text-brand-700 text-sm px-4 py-3">
           Tip: you can also just tell the agent — “every morning at 9, send a good-morning to all my channels.”

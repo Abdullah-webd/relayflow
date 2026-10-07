@@ -1,14 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { env } from "../env";
-import { users } from "../db";
+import { users, monitors, scheduledTasks } from "../db";
 import { requireAuth } from "../auth/context";
-import { PLAN_LIST, TRIAL_DAYS, DEFAULT_PLAN, effectiveStatus } from "../billing/plans";
-import { userCanUse } from "../billing/access";
+import { PLAN_LIST, TRIAL_DAYS, effectiveStatus } from "../billing/plans";
+import { userCanUse, planFor, limitsForUser } from "../billing/access";
 import {
   confirmCheckout,
   createCheckoutSession,
   createPortalSession,
+  changeSubscriptionPlan,
   handleWebhook,
 } from "../billing/stripe";
 
@@ -56,31 +57,46 @@ export async function billingRoutes(app: FastifyInstance) {
   // The signed-in user's billing snapshot.
   app.get("/billing/state", { preHandler: requireAuth }, async (req) => {
     const user = await users().findOne({ _id: req.userId! });
+    const limits = limitsForUser(user);
+    const [monitorsUsed, tasksUsed] = await Promise.all([
+      monitors().countDocuments({ userId: req.userId!, active: true }),
+      scheduledTasks().countDocuments({ userId: req.userId!, active: true }),
+    ]);
+    const hasSub = Boolean(user?.stripeSubscriptionId) && !user?.compAccess && user?.trialSource !== "app";
     return {
-      plan: user?.plan ?? null,
+      // The plan whose features apply now (trials get Pro), and the plan actually paid for.
+      plan: planFor(user),
+      paidPlan: user?.subscriptionStatus === "active" && hasSub ? (user.plan ?? null) : null,
+      limits: {
+        monitors: Number.isFinite(limits.monitors) ? limits.monitors : null,
+        scheduledTasks: Number.isFinite(limits.scheduledTasks) ? limits.scheduledTasks : null,
+        autoReply: limits.autoReply,
+        model: limits.model,
+      },
+      usage: { monitors: monitorsUsed, scheduledTasks: tasksUsed },
       status: user ? effectiveStatus(user) : "none",
       hasAccess: userCanUse(user),
       // Only accounts with a real Stripe subscription can use the billing portal.
-      hasStripeSubscription: Boolean(user?.stripeSubscriptionId) && !user?.compAccess && user?.trialSource !== "app",
+      hasStripeSubscription: hasSub,
       trialEndsAt: user?.trialEndsAt ?? null,
       currentPeriodEnd: user?.currentPeriodEnd ?? null,
       cancelAtPeriodEnd: Boolean(user?.cancelAtPeriodEnd),
     };
   });
 
-  // Start the subscription (1-day free trial, card required) via Stripe Checkout.
+  // Start a paid subscription (Starter or Pro) via Stripe Checkout. The free trial is in-app.
   app.post("/billing/checkout", { preHandler: requireAuth }, async (req, reply) => {
     if (!env.stripe.enabled) return reply.code(503).send({ error: "billing_unavailable" });
-    // Single plan: accept an optional key but always fall back to the default plan.
-    const parsed = z.object({ plan: z.enum(["pro"]).optional() }).safeParse(req.body ?? {});
+    const parsed = z.object({ plan: z.enum(["starter", "pro"]) }).safeParse(req.body ?? {});
     if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
     const user = await users().findOne({ _id: req.userId! });
     if (!user) return reply.code(401).send({ error: "unauthorized" });
     if (!user.emailVerified) return reply.code(403).send({ error: "email_unverified" });
     // Never create a second subscription for an account that already has one.
-    if (user.subscriptionStatus === "active") return reply.code(409).send({ error: "already_subscribed", detail: "Your subscription is already active." });
+    // Already subscribed: switch plans instead of creating a second subscription.
+    if (user.subscriptionStatus === "active") return reply.code(409).send({ error: "already_subscribed", detail: "You already have a subscription. Use Change plan instead." });
     try {
-      const url = await createCheckoutSession(user, parsed.data.plan ?? DEFAULT_PLAN, appOrigin(req));
+      const url = await createCheckoutSession(user, parsed.data.plan, appOrigin(req));
       return reply.send({ url });
     } catch (error) {
       console.error(`[billing] checkout failed: ${(error as Error).message}`);
@@ -99,6 +115,27 @@ export async function billingRoutes(app: FastifyInstance) {
     } catch (error) {
       console.error(`[billing] confirm failed: ${(error as Error).message}`);
       return reply.code(500).send({ error: "confirm_failed" });
+    }
+  });
+
+  // Switch an active subscription between Starter and Pro (prorated by Stripe).
+  app.post("/billing/change-plan", { preHandler: requireAuth }, async (req, reply) => {
+    if (!env.stripe.enabled) return reply.code(503).send({ error: "billing_unavailable" });
+    const parsed = z.object({ plan: z.enum(["starter", "pro"]) }).safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_input" });
+    const user = await users().findOne({ _id: req.userId! });
+    if (!user) return reply.code(401).send({ error: "unauthorized" });
+    const hasSub = Boolean(user.stripeSubscriptionId) && !user.compAccess && user.trialSource !== "app";
+    if (user.subscriptionStatus !== "active" || !hasSub) {
+      return reply.code(409).send({ error: "no_subscription", detail: "Subscribe first, then you can switch plans." });
+    }
+    if (user.plan === parsed.data.plan) return reply.code(400).send({ error: "same_plan", detail: "You're already on this plan." });
+    try {
+      await changeSubscriptionPlan(user, parsed.data.plan);
+      return reply.send({ ok: true, plan: parsed.data.plan });
+    } catch (error) {
+      console.error(`[billing] change plan failed: ${(error as Error).message}`);
+      return reply.code(500).send({ error: "change_failed", detail: "Couldn’t change your plan. Please try again." });
     }
   });
 

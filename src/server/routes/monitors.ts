@@ -4,6 +4,8 @@ import { monitors } from "../db";
 import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
 import { MIN_INTERVAL_MINUTES, DEFAULT_INTERVAL_MINUTES } from "../monitors";
+import { checkQuota, planLimitMessage } from "../billing/access";
+import { env } from "../env";
 
 export async function monitorRoutes(app: FastifyInstance) {
   app.get("/monitors", { preHandler: requireActivePlan }, async (req) => {
@@ -29,7 +31,7 @@ export async function monitorRoutes(app: FastifyInstance) {
     const body = z
       .object({
         title: z.string().min(1).max(120),
-        platform: z.enum(["whatsapp", "telegram", "slack", "gmail"]),
+        platform: z.enum(["whatsapp", "telegram", "slack", "gmail"]).refine((p) => p !== "gmail" || env.gmailEnabled, { message: "Gmail isn't supported right now." }),
         group: z.string().max(200).nullable().optional(),
         condition: z.string().min(1).max(1000),
         mode: z.enum(["match", "absence"]).default("match"),
@@ -38,6 +40,10 @@ export async function monitorRoutes(app: FastifyInstance) {
       })
       .safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input", detail: body.error.issues[0]?.message });
+
+    // Plan limit (Starter: 3 active monitors).
+    const quota = await checkQuota(req.userId!, "monitors");
+    if (!quota.ok) return reply.code(403).send({ error: "plan_limit", detail: planLimitMessage("monitors", quota.limit) });
 
     const now = new Date();
     const intervalMinutes = Math.max(MIN_INTERVAL_MINUTES, body.data.intervalMinutes ?? DEFAULT_INTERVAL_MINUTES);
@@ -73,6 +79,13 @@ export async function monitorRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     const body = z.object({ active: z.boolean() }).safeParse(req.body);
     if (!body.success) return reply.code(400).send({ error: "invalid_input" });
+    if (body.data.active) {
+      const current = await monitors().findOne({ _id: id, userId: req.userId! });
+      if (current && !current.active) {
+        const quota = await checkQuota(req.userId!, "monitors");
+        if (!quota.ok) return reply.code(403).send({ error: "plan_limit", detail: planLimitMessage("monitors", quota.limit) });
+      }
+    }
     await monitors().updateOne({ _id: id, userId: req.userId! }, { $set: { active: body.data.active, updatedAt: new Date() } });
     return { status: "ok" };
   });

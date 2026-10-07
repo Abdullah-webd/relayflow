@@ -3,6 +3,7 @@ import { z } from "zod";
 import { chats, chatMessages, users } from "../db";
 import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
+import { env } from "../env";
 import { streamRun, acknowledgeAction } from "../agent/agent";
 import { sendToTargets, type SendTarget } from "../connectors/manager";
 import type { Platform } from "../db";
@@ -147,7 +148,7 @@ export async function chatRoutes(app: FastifyInstance) {
         targets: z
           .array(
             z.object({
-              platform: z.enum(["whatsapp", "telegram", "slack", "gmail"]),
+              platform: z.enum(["whatsapp", "telegram", "slack", "gmail"]).refine((p) => p !== "gmail" || env.gmailEnabled, { message: "Gmail isn't supported right now." }),
               connectionId: z.string(),
               externalId: z.string(),
               name: z.string(),
