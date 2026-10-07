@@ -45,7 +45,7 @@ export default async function billing() {
   check("Starter: re-activating over the limit blocked", r.status === 403);
   const tool: any = await toolByName.get("prepare_monitor")!.handler(st._id, { title: "x", platform: "whatsapp", group: null, condition: "y", mode: "match", interval_minutes: 30, absence_hours: null });
   check("agent explains the Starter limit", tool.error === "plan_limit");
-  check("Starter: knowledge base is Pro-only", (await api("/api/knowledge/docs", { method: "POST", token: stt, body: JSON.stringify({ title: "FAQ", source: "text", text: "hi" }) })).status === 403);
+  check("Starter: knowledge base is Pro-only", (await api("/api/auto-replies", { method: "POST", token: stt, body: JSON.stringify({ name: "FAQ" }) })).status === 403);
   const state = (await api("/api/billing/state", { token: stt })).body;
   check("Settings shows usage 3 of 3", state.limits?.monitors === 3 && state.usage?.monitors === 3);
 

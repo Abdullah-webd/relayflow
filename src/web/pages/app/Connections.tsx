@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../lib/api";
-import { motion } from "motion/react";
-import { Rise } from "../../components/motion";
+import { AnimatePresence, motion } from "motion/react";
+import { Rise, EASE_OUT } from "../../components/motion";
 import { useStickyState } from "../../lib/sticky";
-import { ChannelMark, type Channel } from "../../components/ChannelMark";
-import { Check, X, RefreshCw, Plug } from "lucide-react";
+import { Page, PageHeader, Badge, ChannelIcon, Confirm, useToast, type Tone } from "../../components/ui";
+import { Check, X, RefreshCw, Plug, ListChecks, Search } from "lucide-react";
 
 interface ConnView {
   id: string;
@@ -23,34 +23,42 @@ interface Dest {
 }
 
 const PLATFORMS = [
-  { key: "whatsapp", name: "WhatsApp", color: "#25D366", copy: "Scan a QR from WhatsApp → Linked devices. Reads your groups and private chats." },
-  { key: "telegram", name: "Telegram", color: "#229ED9", copy: "Sign in with your phone number. Groups, channels and private chats." },
-  { key: "slack", name: "Slack", color: "#611f69", copy: "Authorize with Slack. Your channels and messages." },
+  { key: "whatsapp", name: "WhatsApp", copy: "Link with a QR code, like WhatsApp Web. Reads your groups and private chats." },
+  { key: "telegram", name: "Telegram", copy: "Sign in with your phone number. Groups, channels and private chats." },
+  { key: "slack", name: "Slack", copy: "Authorize with Slack. Your channels and direct messages." },
 ];
 
-const STATUS: Record<string, { label: string; cls: string }> = {
-  connected: { label: "Connected", cls: "bg-emerald-50 text-emerald-700" },
-  connecting: { label: "Connecting…", cls: "bg-amber-50 text-amber-700" },
-  qr: { label: "Scan QR", cls: "bg-amber-50 text-amber-700" },
-  pending: { label: "Finish sign-in", cls: "bg-amber-50 text-amber-700" },
-  disconnected: { label: "Disconnected", cls: "bg-surface text-ink-600" },
-  error: { label: "Error", cls: "bg-red-50 text-red-600" },
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+  connected: { label: "Connected", tone: "live" },
+  connecting: { label: "Connecting", tone: "warn" },
+  qr: { label: "Waiting for QR scan", tone: "warn" },
+  pending: { label: "Finish sign-in", tone: "warn" },
+  disconnected: { label: "Disconnected", tone: "idle" },
+  error: { label: "Needs reconnecting", tone: "bad" },
 };
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
-    <motion.div className="fixed inset-0 z-50 bg-ink-900/40 grid place-items-center p-4" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+    <motion.div className="fixed inset-0 z-50 grid place-items-center bg-ink-900/40 p-4" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
       <motion.div
-        className="card w-full max-w-md p-0 overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-line bg-white shadow-pop"
         onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, scale: 0.96, y: 6 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ type: "spring", duration: 0.3, bounce: 0 }}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h3 className="font-semibold text-ink-900">{title}</h3>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-700">
-            <X size={20} />
+          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-surface hover:text-ink-700" aria-label="Close">
+            <X size={18} />
           </button>
         </div>
         <div className="p-5">{children}</div>
@@ -60,9 +68,11 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 }
 
 export default function Connections() {
+  const toast = useToast();
   const [conns, setConns, connsCached] = useStickyState<ConnView[]>("connections", []);
   const [params, setParams] = useSearchParams();
   const [modal, setModal] = useState<ReactNode>(null);
+  const [confirm, setConfirm] = useState<ConnView | null>(null);
 
   const load = async () => {
     const { connections } = await api<{ connections: ConnView[] }>("/connections");
@@ -73,7 +83,7 @@ export default function Connections() {
   }, []);
 
   const banner = params.get("connected")
-    ? { ok: true, text: `${PLATFORMS.find((p) => p.key === params.get("connected"))?.name || "Channel"} connected.` }
+    ? { ok: true, text: `${PLATFORMS.find((p) => p.key === params.get("connected"))?.name || "Channel"} connected. Your chats are syncing now.` }
     : params.get("error")
     ? { ok: false, text: `${PLATFORMS.find((p) => p.key === params.get("error"))?.name || "That channel"} didn't connect. Please try again.` }
     : null;
@@ -87,72 +97,79 @@ export default function Connections() {
     window.location.href = url;
   }
 
-  async function disconnect(id: string) {
-    if (!confirm("Disconnect this channel?")) return;
-    await api(`/connections/${id}`, { method: "DELETE" });
+  async function disconnect(c: ConnView) {
+    setConfirm(null);
+    await api(`/connections/${c.id}`, { method: "DELETE" });
+    toast("Disconnected");
     load();
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-4xl px-6 py-8">
-        <h1 className="text-2xl font-semibold text-ink-900">Connections</h1>
-        <p className="mt-1 text-ink-500">Connect your channels once. Your agent sees the recent messages and can send on your behalf.</p>
+    <Page width="max-w-[960px]">
+      <PageHeader title="Connections" description="Connect each channel once. RelayFlow reads recent messages in the chats you choose, and only sends when you approve (or when an auto-reply you turned on answers)." />
 
+      <AnimatePresence>
         {banner && (
-          <div className={`mt-5 rounded-xl px-4 py-3 text-[15px] font-medium ${banner.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
-            {banner.text}
-            <button className="ml-2 underline opacity-70" onClick={() => setParams({})}>dismiss</button>
-          </div>
+          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.2, ease: EASE_OUT }} className={`mb-5 flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-[14px] font-medium ${banner.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
+            <span className="inline-flex items-center gap-2">{banner.ok ? <Check size={16} /> : <X size={16} />}{banner.text}</span>
+            <button className="grid h-7 w-7 place-items-center rounded-lg opacity-70 hover:opacity-100" onClick={() => setParams({})} aria-label="Dismiss">
+              <X size={15} />
+            </button>
+          </motion.div>
         )}
+      </AnimatePresence>
 
-        <div className="mt-6 grid sm:grid-cols-2 gap-4">
-          {PLATFORMS.map((p) => {
-            const conn = byPlatform(p.key);
-            const status = conn ? STATUS[conn.status] || { label: conn.status, cls: "bg-surface text-ink-600" } : null;
-            const isConnected = conn?.status === "connected";
-            const needsReconnect = conn && (conn.status === "disconnected" || conn.status === "error");
-            return (
-              <Rise key={p.key} index={PLATFORMS.indexOf(p)} stagger={!connsCached} className="card p-5 flex flex-col transition-[border-color,box-shadow] duration-200 hover:border-line-strong hover:shadow-md">
-                <div className="flex items-center gap-3">
-                  <span className="h-11 w-11 rounded-xl grid place-items-center text-white" style={{ background: p.color }}>
-                    <ChannelMark channel={p.key as Channel} size={22} />
-                  </span>
-                  <div className="flex-1">
-                    <div className="font-semibold text-ink-900">{p.name}</div>
-                    <div className="text-sm text-ink-500 truncate">{conn?.displayName && isConnected ? conn.displayName : "Not connected"}</div>
-                  </div>
-                  {status && <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${status.cls}`}>{status.label}</span>}
+      <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
+        {PLATFORMS.map((p, i) => {
+          const conn = byPlatform(p.key);
+          const status = conn ? STATUS[conn.status] || { label: conn.status, tone: "idle" as Tone } : null;
+          const isConnected = conn?.status === "connected";
+          const needsReconnect = conn && (conn.status === "disconnected" || conn.status === "error");
+          return (
+            <Rise key={p.key} index={i} stagger={!connsCached} className="flex flex-wrap items-center gap-x-4 gap-y-3 bg-white px-5 py-5">
+              <ChannelIcon platform={p.key} size={40} />
+              <div className="min-w-[200px] flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[15px] font-semibold text-ink-900">{p.name}</span>
+                  {status && <Badge tone={status.tone} dot>{status.label}</Badge>}
                 </div>
-                <p className="mt-3 text-sm text-ink-600 leading-relaxed">{p.copy}</p>
-                {isConnected && (
-                  <div className="mt-2 text-sm text-ink-500">{conn!.selectedCount} channel{conn!.selectedCount === 1 ? "" : "s"} in scope</div>
+                <p className="mt-0.5 text-[13.5px] text-ink-500">
+                  {isConnected ? `${conn!.displayName}, ${conn!.selectedCount} chat${conn!.selectedCount === 1 ? "" : "s"} in scope` : conn?.status === "error" && conn.lastError ? conn.lastError : p.copy}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {!conn || needsReconnect ? (
+                  <button onClick={() => connect(p.key)} className="btn-primary h-9">
+                    <Plug size={15} /> {needsReconnect ? "Reconnect" : "Connect"}
+                  </button>
+                ) : isConnected ? (
+                  <>
+                    <button onClick={() => setModal(<DestinationsModal conn={conn!} onClose={() => { setModal(null); load(); }} />)} className="btn-ghost h-9">
+                      <ListChecks size={15} /> Choose chats
+                    </button>
+                    <button onClick={() => setConfirm(conn!)} className="btn-danger h-9">Disconnect</button>
+                  </>
+                ) : (
+                  <button onClick={() => connect(p.key)} className="btn-ghost h-9">
+                    <RefreshCw size={15} /> Continue setup
+                  </button>
                 )}
-                <div className="mt-4 flex gap-2">
-                  {!conn || needsReconnect ? (
-                    <button onClick={() => connect(p.key)} className="btn-primary h-10 px-4">
-                      <Plug size={16} /> {needsReconnect ? "Reconnect" : "Connect"}
-                    </button>
-                  ) : isConnected ? (
-                    <>
-                      <button onClick={() => setModal(<DestinationsModal conn={conn!} onClose={() => { setModal(null); load(); }} />)} className="btn-ghost h-10 px-4">
-                        Choose channels
-                      </button>
-                      <button onClick={() => disconnect(conn!.id)} className="btn-danger h-10 px-4">Disconnect</button>
-                    </>
-                  ) : (
-                    <button onClick={() => connect(p.key)} className="btn-ghost h-10 px-4">
-                      <RefreshCw size={16} /> Continue
-                    </button>
-                  )}
-                </div>
-              </Rise>
-            );
-          })}
-        </div>
-      </div>
+              </div>
+            </Rise>
+          );
+        })}
+      </ul>
+      <p className="mt-4 text-[13px] text-ink-500">Credentials are encrypted. Disconnecting removes RelayFlow's access straight away.</p>
       {modal}
-    </div>
+      <Confirm
+        open={!!confirm}
+        title={`Disconnect ${PLATFORMS.find((p) => p.key === confirm?.platform)?.name}?`}
+        body="Auto-replies and monitors on this channel stop until you reconnect."
+        confirmLabel="Disconnect"
+        onClose={() => setConfirm(null)}
+        onConfirm={() => confirm && disconnect(confirm)}
+      />
+    </Page>
   );
 }
 
@@ -240,7 +257,7 @@ function WhatsAppModal({ onClose }: { onClose: () => void }) {
               </div>
             )}
           </div>
-          <p className="text-xs text-ink-400 mt-2 text-center">Only your group messages are read. Keep this open until it connects.</p>
+          <p className="text-xs text-ink-400 mt-2 text-center">You choose which chats RelayFlow reads afterwards. Keep this open until it connects.</p>
         </>
       )}
     </Modal>
@@ -310,6 +327,7 @@ function TelegramModal({ onClose }: { onClose: () => void }) {
 function DestinationsModal({ conn, onClose }: { conn: ConnView; onClose: () => void }) {
   const [dests, setDests] = useState<Dest[]>([]);
   const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
 
   useEffect(() => {
     api<{ destinations: Dest[] }>(`/connections/${conn.id}/destinations`).then(({ destinations }) => setDests(destinations));
@@ -325,11 +343,15 @@ function DestinationsModal({ conn, onClose }: { conn: ConnView; onClose: () => v
   }
 
   return (
-    <Modal title={`${conn.displayName} — channels in scope`} onClose={onClose}>
-      <p className="text-sm text-ink-500 mb-3">Pick which conversations the agent should include.</p>
-      <div className="max-h-72 overflow-y-auto space-y-1">
+    <Modal title={`Chats RelayFlow reads (${conn.displayName})`} onClose={onClose}>
+      <p className="mb-3 text-[13.5px] text-ink-500">Pick which chats RelayFlow should read. Unticked chats are ignored completely.</p>
+      <div className="relative mb-2">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats" className="input h-9 pl-9" aria-label="Search chats" />
+      </div>
+      <div className="max-h-72 overflow-y-auto space-y-0.5">
         {dests.length === 0 && <p className="text-sm text-ink-400 py-4">No channels found yet. They appear shortly after connecting.</p>}
-        {dests.map((d) => (
+        {dests.filter((d) => !q || d.name.toLowerCase().includes(q.toLowerCase())).map((d) => (
           <label key={d.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-surface cursor-pointer">
             <input
               type="checkbox"
@@ -338,11 +360,11 @@ function DestinationsModal({ conn, onClose }: { conn: ConnView; onClose: () => v
               className="h-4 w-4 accent-brand-600"
             />
             <span className="flex-1 text-[15px] text-ink-800 truncate">{d.name}</span>
-            <span className="text-xs text-ink-400">{d.kind}</span>
+            <span className="text-xs text-ink-400">{d.kind === "dm" ? "Private chat" : d.kind === "channel" ? "Channel" : "Group"}</span>
           </label>
         ))}
       </div>
-      <button onClick={save} disabled={busy} className="btn-primary w-full mt-4">{busy ? "Saving…" : "Save"}</button>
+      <button onClick={save} disabled={busy} className="btn-primary w-full mt-4">{busy ? "Saving…" : "Save chats"}</button>
     </Modal>
   );
 }

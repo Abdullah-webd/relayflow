@@ -14,7 +14,8 @@ import { chatRoutes } from "./routes/chat";
 import { connectionRoutes } from "./routes/connections";
 import { taskRoutes } from "./routes/tasks";
 import { monitorRoutes } from "./routes/monitors";
-import { knowledgeRoutes } from "./routes/knowledge";
+import { autoReplyRoutes } from "./routes/autoReplies";
+import { overviewRoutes } from "./routes/overview";
 import { billingRoutes, stripeWebhookHandler } from "./routes/billing";
 import { resumeConnections, stopConnections } from "./connectors/manager";
 import { runAsLeader, releaseLeadership } from "./runtime/leader";
@@ -61,7 +62,8 @@ async function main() {
   await app.register(connectionRoutes, { prefix: "/api" });
   await app.register(taskRoutes, { prefix: "/api" });
   await app.register(monitorRoutes, { prefix: "/api" });
-  await app.register(knowledgeRoutes, { prefix: "/api" });
+  await app.register(autoReplyRoutes, { prefix: "/api" });
+  await app.register(overviewRoutes, { prefix: "/api" });
 
   // Serve the built React app in production (single Railway service). `index: false` so every
   // page — including "/" — goes through the SEO handler that writes per-page head tags.

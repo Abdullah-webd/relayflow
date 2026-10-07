@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import { api } from "../../lib/api";
 import { Logo } from "../../components/Logo";
 import { motion, AnimatePresence } from "motion/react";
 import { Rise, Dialog, Pop, SkeletonRows, SPRING, EASE_OUT } from "../../components/motion";
 import { useStickyState, peekSticky, putSticky } from "../../lib/sticky";
-import { Plus, Send, Trash2, Check, MessageSquare, X, MoreVertical, Pencil, AlertTriangle } from "lucide-react";
+import { Plus, ArrowUp, Trash2, Check, X, MoreHorizontal, Pencil, AlertTriangle, Search, PanelLeft, Sparkles, Radar, Send } from "lucide-react";
+import { ago, useToast } from "../../components/ui";
 
 interface Step {
   label: string;
@@ -37,6 +38,10 @@ const PLATFORM_LABEL: Record<string, string> = { whatsapp: "WhatsApp", telegram:
 export default function Chat() {
   const { chatId } = useParams();
   const nav = useNavigate();
+  const location = useLocation();
+  const toast = useToast();
+  const [q, setQ] = useState("");
+  const [listOpen, setListOpen] = useState(false); // mobile: chat list as a sheet
   // Remembered across tab switches → the list is there instantly when you come back.
   const [chats, setChats, chatsCached] = useStickyState<ChatSummary[]>("chats", []);
   const [chatsLoaded, setChatsLoaded] = useState(chatsCached);
@@ -64,6 +69,19 @@ export default function Chat() {
   useEffect(() => {
     loadChats();
   }, []);
+
+  // A question typed on the Overview page arrives here and is sent straight away.
+  const askedRef = useRef(false); // effects run twice in dev (StrictMode): send once
+  useEffect(() => {
+    const ask = (location.state as { ask?: string } | null)?.ask;
+    if (ask && !askedRef.current) {
+      askedRef.current = true;
+      nav(location.pathname, { replace: true, state: null });
+      send(ask);
+    }
+  }, []);
+
+  useEffect(() => setListOpen(false), [chatId]);
 
   useEffect(() => {
     if (!chatId) {
@@ -105,6 +123,7 @@ export default function Chat() {
     setConfirmDelete(null);
     setChats((c) => c.filter((x) => x.id !== id));
     if (id === chatId) nav("/app/chat");
+    toast("Chat deleted");
     await api(`/chats/${id}`, { method: "DELETE" }).catch(() => loadChats());
   }
 
@@ -125,11 +144,11 @@ export default function Chat() {
   const patchAssistant = (id: string, fn: (m: Msg) => Msg) =>
     setMessages((prev) => prev.map((m) => (m.id === id ? fn(m) : m)));
 
-  async function send() {
-    const text = input.trim();
+  async function send(override?: string) {
+    const text = (override ?? input).trim();
     if (!text || busy) return;
     setBusy(true);
-    setInput("");
+    if (override === undefined) setInput("");
 
     let activeId = chatId;
     if (!activeId) {
@@ -283,27 +302,34 @@ export default function Chat() {
     }
   }
 
-  return (
-    <div className="h-full flex">
-      {/* Sessions */}
-      <div className="w-64 shrink-0 border-r border-line bg-white flex flex-col">
-        <div className="p-3">
-          <button onClick={newChat} className="btn-primary w-full h-11">
-            <Plus size={18} /> New chat
-          </button>
+  const shown = q ? chats.filter((c) => `${c.title} ${c.preview || ""}`.toLowerCase().includes(q.toLowerCase())) : chats;
+
+  const sessions = (
+    <div className="flex h-full w-[284px] shrink-0 flex-col border-r border-line bg-white">
+      <div className="flex items-center justify-between px-4 pb-2 pt-4">
+        <h2 className="font-display text-[17px] font-semibold text-navy">Chats</h2>
+        <button onClick={newChat} className="btn-primary h-8 gap-1.5 px-2.5 text-[13px]" aria-label="New chat">
+          <Plus size={15} /> New
+        </button>
+      </div>
+      <div className="px-3 pb-2">
+        <div className="relative">
+          <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search chats" aria-label="Search chats" className="h-8 w-full rounded-lg bg-surface pl-8 pr-2 text-[13px] text-ink-900 outline-none ring-brand-500/30 placeholder:text-ink-400 focus:ring-2" />
         </div>
-        <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
-          {!chatsLoaded && <div className="px-1 pt-1"><SkeletonRows rows={5} className="h-11" /></div>}
-          {chatsLoaded && chats.length === 0 && (
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-ink-400 px-3 py-4">No conversations yet.</motion.p>
+      </div>
+      <div className="flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
+          {!chatsLoaded && <div className="px-1 pt-1"><SkeletonRows rows={5} className="h-12" /></div>}
+          {chatsLoaded && shown.length === 0 && (
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-3 py-4 text-[13px] text-ink-500">{q ? `No chats match “${q}”.` : "No conversations yet. Ask anything to start one."}</motion.p>
           )}
           <AnimatePresence initial={!chatsCached}>
-          {chats.map((c, index) => {
+          {shown.map((c, index) => {
             const active = c.id === chatId;
             const editing = editingId === c.id;
             return (
               <Rise key={c.id} index={index} stagger={!chatsCached} className={`group relative rounded-xl ${active ? "" : "hover:bg-surface"}`}>
-                {active && <motion.div layoutId="chat-pill" className="absolute inset-0 rounded-xl bg-brand-50" transition={SPRING} />}
+                {active && <motion.div layoutId="chat-pill" className="absolute inset-0 rounded-xl bg-brand-50 ring-1 ring-inset ring-brand-100" transition={SPRING} />}
                 {editing ? (
                   <div className="px-2 py-1.5">
                     <input
@@ -319,27 +345,29 @@ export default function Chat() {
                     />
                   </div>
                 ) : (
-                  <div className="relative flex items-start gap-2.5 px-3 py-2.5 cursor-pointer" onClick={() => nav(`/app/chat/${c.id}`)}>
-                    <MessageSquare size={16} className={`mt-0.5 shrink-0 ${active ? "text-brand-600" : "text-ink-400"}`} />
+                  <div className="relative flex cursor-pointer items-start gap-2 px-3 py-2.5" onClick={() => nav(`/app/chat/${c.id}`)}>
                     <div className="min-w-0 flex-1">
-                      <div className={`truncate text-sm font-semibold ${active ? "text-brand-700" : "text-ink-800"}`}>{c.title}</div>
-                      {c.preview && <div className="truncate text-xs text-ink-400 mt-0.5">{c.preview}</div>}
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className={`truncate text-[13.5px] font-medium ${active ? "text-brand-800" : "text-ink-900"}`}>{c.title}</span>
+                        <span className="shrink-0 text-[11.5px] text-ink-400 group-hover:invisible">{ago(c.updatedAt)}</span>
+                      </div>
+                      {c.preview && <div className="mt-0.5 truncate text-[12.5px] text-ink-500">{c.preview}</div>}
                     </div>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setMenuId(menuId === c.id ? null : c.id);
                       }}
-                      className="opacity-0 group-hover:opacity-100 text-ink-400 hover:text-ink-700 -mr-1 mt-0.5 shrink-0"
+                      className="absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-md text-ink-400 opacity-0 hover:bg-white hover:text-ink-700 focus:opacity-100 group-hover:opacity-100"
                       aria-label="Chat options"
                     >
-                      <MoreVertical size={16} />
+                      <MoreHorizontal size={15} />
                     </button>
                   </div>
                 )}
 
                 {menuId === c.id && <div className="fixed inset-0 z-10" onClick={() => setMenuId(null)} />}
-                <Pop open={menuId === c.id} className="absolute right-2 top-10 z-20 w-40 rounded-xl border border-line bg-white shadow-pop p-1">
+                <Pop open={menuId === c.id} className="absolute right-2 top-9 z-20 w-40 rounded-xl border border-line bg-white shadow-pop p-1">
                       <button
                         onClick={() => startRename(c)}
                         className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-ink-700 hover:bg-surface"
@@ -360,13 +388,28 @@ export default function Chat() {
             );
           })}
           </AnimatePresence>
-        </div>
       </div>
+    </div>
+  );
+
+  return (
+    <div className="h-full flex">
+      <div className="hidden h-full lg:flex">{sessions}</div>
+      <AnimatePresence>
+        {listOpen && (
+          <div className="fixed inset-0 z-40 flex lg:hidden">
+            <motion.div className="absolute inset-0 bg-ink-900/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setListOpen(false)} />
+            <motion.div className="relative h-full" initial={{ x: -300 }} animate={{ x: 0 }} exit={{ x: -300, transition: { duration: 0.18 } }} transition={{ duration: 0.26, ease: EASE_OUT }}>
+              {sessions}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Delete confirmation */}
       <Dialog open={!!confirmDelete} onClose={() => setConfirmDelete(null)}>
         {confirmDelete && (
-          <div className="card w-full max-w-sm p-6">
+          <div className="w-[min(92vw,400px)] rounded-2xl border border-line bg-white p-6 shadow-pop">
             <div className="flex items-center gap-3">
               <span className="grid place-items-center h-11 w-11 rounded-full bg-red-50 text-red-600 shrink-0">
                 <AlertTriangle size={20} />
@@ -387,18 +430,39 @@ export default function Chat() {
 
       {/* Conversation */}
       <div className="flex-1 min-w-0 flex flex-col bg-white">
+        <div className="flex h-12 items-center gap-2 border-b border-line px-3 lg:hidden">
+          <button onClick={() => setListOpen(true)} className="inline-flex h-9 items-center gap-2 rounded-lg px-2.5 text-[14px] font-medium text-ink-700 hover:bg-surface">
+            <PanelLeft size={17} /> Chats
+          </button>
+          <button onClick={newChat} className="ml-auto grid h-9 w-9 place-items-center rounded-lg text-ink-600 hover:bg-surface" aria-label="New chat">
+            <Plus size={18} />
+          </button>
+        </div>
         <div ref={scrollRef} className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl px-5 py-8">
             {messages.length === 0 && (
-              <motion.div className="mt-20 text-center" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE_OUT }}>
-                <span className="inline-block"><Logo size={48} showText={false} /></span>
-                <h2 className="mt-5 text-2xl font-semibold text-ink-900">What should we do across your channels?</h2>
-                <p className="mt-2 text-ink-500">Ask about recent messages, or say “send this to all my channels”.</p>
-                <div className="mt-6 flex flex-wrap gap-2 justify-center">
-                  {["Summarize what's been said on WhatsApp today", "Which channels am I connected to?", "Send 'We're open!' to all my channels"].map((p) => (
-                    <button key={p} onClick={() => setInput(p)} className="text-sm rounded-full border border-line px-3.5 py-2 text-ink-600 transition-[background-color,border-color,transform] duration-150 hover:bg-surface hover:border-line-strong active:scale-[0.97]">
-                      {p}
-                    </button>
+              <motion.div className="mt-[8vh]" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: EASE_OUT }}>
+                <Logo size={36} showText={false} />
+                <h2 className="mt-5 font-display text-[28px] font-semibold leading-tight tracking-[-0.02em] text-navy">What should we do across your channels?</h2>
+                <p className="mt-2 text-[15px] text-ink-500">RelayFlow reads your WhatsApp, Telegram and Slack chats. Ask what happened, send to any group, or set something up. Nothing is sent without your approval.</p>
+                <div className="mt-7 grid gap-2 sm:grid-cols-2">
+                  {[
+                    { icon: Sparkles, t: "Summarize what's been said on WhatsApp today" },
+                    { icon: Search, t: "Did any customer ask about delivery this week?" },
+                    { icon: Send, t: "Send 'We're open today until 8pm' to all my groups" },
+                    { icon: Radar, t: "Let me know when someone asks for a quote" },
+                  ].map((p, i) => (
+                    <motion.button
+                      key={p.t}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, ease: EASE_OUT, delay: 0.08 + i * 0.04 }}
+                      onClick={() => send(p.t)}
+                      className="group flex items-start gap-3 rounded-xl border border-line px-3.5 py-3 text-left text-[14px] text-ink-700 transition-[background-color,border-color,transform] duration-150 hover:border-brand-200 hover:bg-brand-50/40 active:scale-[0.98]"
+                    >
+                      <p.icon size={16} className="mt-0.5 shrink-0 text-ink-400 group-hover:text-brand-600" />
+                      {p.t}
+                    </motion.button>
                   ))}
                 </div>
               </motion.div>
@@ -426,8 +490,8 @@ export default function Chat() {
         </div>
 
         {/* Composer */}
-        <div className="border-t border-line p-4">
-          <div className="mx-auto max-w-3xl flex items-end gap-2 rounded-2xl border border-line focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/10 bg-white p-2">
+        <div className="px-4 pb-4 pt-2">
+          <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-line-strong bg-white p-2 shadow-xs transition-[border-color,box-shadow] focus-within:border-brand-500 focus-within:shadow-[0_0_0_3px_rgb(var(--brand-500)/0.15)]">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -438,13 +502,15 @@ export default function Chat() {
                 }
               }}
               rows={1}
-              placeholder="Message RelayFlow…  (Enter to send)"
-              className="flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none max-h-40"
+              placeholder="Message RelayFlow…"
+              aria-label="Message RelayFlow"
+              className="flex-1 resize-none bg-transparent px-3 py-2.5 text-[15px] outline-none max-h-40 placeholder:text-ink-400"
             />
-            <button onClick={send} disabled={busy || !input.trim()} className="btn-primary h-11 w-11 !px-0 rounded-xl">
-              <Send size={18} />
+            <button onClick={() => send()} disabled={busy || !input.trim()} className="btn-primary h-10 w-10 !px-0 rounded-xl" aria-label="Send">
+              <ArrowUp size={18} />
             </button>
           </div>
+          <p className="mx-auto mt-1.5 max-w-3xl px-2 text-[11.5px] text-ink-400">Enter to send, Shift + Enter for a new line. Anything RelayFlow sends waits for your approval.</p>
         </div>
       </div>
     </div>
@@ -545,7 +611,7 @@ function MessageView({
           const many = g.targets.length > 1;
           const toLabel = !many ? names[0] : `${g.targets.length} groups — ${names.slice(0, 3).join(", ")}${g.targets.length > 3 ? "…" : ""}`;
           return (
-            <div key={g.key} className="mt-3 card p-4">
+            <div key={g.key} className="mt-3 rounded-2xl border border-line bg-white p-4">
               <div className="text-sm font-semibold text-ink-900">
                 Send to {label}{many ? ` · ${g.targets.length} groups` : ""}?
               </div>
@@ -561,7 +627,7 @@ function MessageView({
         })}
 
         {unresolvedSend && (
-          <div className="mt-3 card p-4 border-amber-200">
+          <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
             <div className="text-sm font-semibold text-ink-900">Couldn't find a matching destination</div>
             <div className="mt-1 text-sm text-ink-500">Check that the channel is connected and the group name is correct, then try again.</div>
           </div>
@@ -572,7 +638,7 @@ function MessageView({
           if (actionStatus[key]) return renderStatus(key);
           const r = action.result;
           return (
-            <div key={key} className="mt-3 card p-4">
+            <div key={key} className="mt-3 rounded-2xl border border-line bg-white p-4">
               <div className="text-sm font-semibold text-ink-900">Schedule this task?</div>
               <div className="mt-2 text-[15px] text-ink-800">{r.title}</div>
               <div className="mt-1 text-sm text-ink-500">
@@ -591,7 +657,7 @@ function MessageView({
           const r = action.result;
           const where = `${PLATFORM_LABEL[r.platform] || r.platform}${r.group ? ` · ${r.group}` : ""}`;
           return (
-            <div key={key} className="mt-3 card p-4">
+            <div key={key} className="mt-3 rounded-2xl border border-line bg-white p-4">
               <div className="text-sm font-semibold text-ink-900">Start this monitor?</div>
               <div className="mt-2 text-[15px] text-ink-800">{r.title}</div>
               <div className="mt-1 text-sm text-ink-500">
@@ -615,7 +681,7 @@ function MessageView({
 
 function ActivityFeed({ steps }: { steps: Step[] }) {
   return (
-    <div className="card p-4">
+    <div className="rounded-2xl border border-line bg-white p-4">
       <div className="flex items-center gap-2 text-ink-700 font-semibold text-[15px]">
         <span className="h-4 w-4 rounded-full border-2 border-brand-500 border-t-transparent animate-spin" />
         Working on it…

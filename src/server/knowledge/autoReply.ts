@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { env } from "../env";
 import { autoReplies, users, type Platform } from "../db";
 import { uid } from "../lib/crypto";
-import { getKnowledgeContext } from "./knowledge";
+import { getResponderContext, responderForDestination } from "./knowledge";
 import { userHasAccessById, limitsForUser } from "../billing/access";
 import { sendToTargets, type SendTarget } from "../connectors/manager";
 import { sendGmail } from "../connectors/gmail";
@@ -110,7 +110,10 @@ export async function handleInbound(msg: InboundMessage): Promise<{ replied: boo
     });
     if (recent) return { replied: false, reason: "rate-limited" };
 
-    const { guardrails, text, hasContent } = await getKnowledgeContext(msg.userId);
+    // Each group is answered by the one auto-reply it belongs to, with that auto-reply's own facts and rules.
+    const responder = await responderForDestination(msg.userId, msg.connectionId, msg.destinationExternalId);
+    if (!responder?.active) return { replied: false, reason: "no active auto-reply for this group" };
+    const { guardrails, text, hasContent } = await getResponderContext(responder);
     if (!hasContent) return { replied: false, reason: "no knowledge base" };
 
     const decision = await decideReply(guardrails, text, msg.senderName, msg.text);
@@ -122,6 +125,8 @@ export async function handleInbound(msg: InboundMessage): Promise<{ replied: boo
     await autoReplies().insertOne({
       _id: uid(),
       userId: msg.userId,
+      responderId: responder._id,
+      responderName: responder.name,
       platform: msg.platform,
       connectionId: msg.connectionId,
       destinationExternalId: msg.destinationExternalId,

@@ -15,8 +15,10 @@ import Reset from "./pages/auth/Reset";
 import AppLayout from "./pages/app/AppLayout";
 import Chat from "./pages/app/Chat";
 import Connections from "./pages/app/Connections";
-import Knowledge from "./pages/app/Knowledge";
-import Tasks from "./pages/app/Tasks";
+import Overview from "./pages/app/Overview";
+import AutoReplies from "./pages/app/AutoReplies";
+import Monitors from "./pages/app/Monitors";
+import Schedules from "./pages/app/Schedules";
 import Settings from "./pages/app/Settings";
 import { type ReactNode } from "react";
 
@@ -76,13 +78,18 @@ export default function App() {
           </RequireActivePlan>
         }
       >
-        <Route index element={<Navigate to="/app/chat" replace />} />
+        <Route index element={<Navigate to="/app/overview" replace />} />
+        <Route path="overview" element={<Overview />} />
         {/* One route (optional param) so navigating to a new chat id does NOT remount
             the component and wipe the in-progress message state. */}
         <Route path="chat/:chatId?" element={<Chat />} />
         <Route path="connections" element={<Connections />} />
-        <Route path="knowledge" element={<Knowledge />} />
-        <Route path="tasks" element={<Tasks />} />
+        <Route path="auto-replies/:id?" element={<AutoReplies />} />
+        <Route path="monitors" element={<Monitors />} />
+        <Route path="schedules" element={<Schedules />} />
+        {/* Old addresses (bookmarks, emails) keep working. */}
+        <Route path="knowledge" element={<Navigate to="/app/auto-replies" replace />} />
+        <Route path="tasks" element={<Navigate to="/app/schedules" replace />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFound />} />

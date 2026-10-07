@@ -1,5 +1,5 @@
 import { motion, AnimatePresence, type HTMLMotionProps } from "motion/react";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 // App motion vocabulary (dial 4: fast, purposeful, never blocks input).
 // "Things arrive like messages: a quick lift from below and a soft settle."
@@ -25,6 +25,12 @@ export function Rise({ index = 0, stagger = true, className, children, ...rest }
 
 /** Centered dialog with a fading backdrop; scales in from 0.96, exits faster. */
 export function Dialog({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
   return (
     <AnimatePresence>
       {open && (

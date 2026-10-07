@@ -4,7 +4,8 @@ import { useAuth } from "../../lib/auth";
 import { api } from "../../lib/api";
 import { useStickyState } from "../../lib/sticky";
 import { PRICES } from "../../lib/pricing";
-import { CreditCard, Loader2, Check, ExternalLink } from "lucide-react";
+import { Loader2, ExternalLink } from "lucide-react";
+import { Page, PageHeader, useToast } from "../../components/ui";
 
 interface BillingState {
   plan: "starter" | "pro" | null;
@@ -51,13 +52,16 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${map[status] || map.none}`}>{label[status] || status}</span>;
 }
 
+// Settings rows: what it is on the left, the controls on the right (stacked on mobile).
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div className="mt-5 card p-6">
-      <h2 className="font-semibold text-ink-900 text-lg">{title}</h2>
-      {desc && <p className="mt-1 text-sm text-ink-500">{desc}</p>}
-      <div className="mt-4">{children}</div>
-    </div>
+    <section className="grid gap-x-10 gap-y-4 border-t border-line py-8 first:border-t-0 first:pt-2 md:grid-cols-[240px_minmax(0,1fr)]">
+      <div>
+        <h2 className="text-[15px] font-semibold text-ink-900">{title}</h2>
+        {desc && <p className="mt-1 text-[13.5px] leading-relaxed text-ink-500">{desc}</p>}
+      </div>
+      <div className="min-w-0">{children}</div>
+    </section>
   );
 }
 
@@ -68,7 +72,7 @@ export default function Settings() {
   const [name, setName] = useState(user?.name || "");
   const [timezone, setTimezone] = useState(user?.timezone || "UTC");
   const [savingProfile, setSavingProfile] = useState(false);
-  const [profileSaved, setProfileSaved] = useState(false);
+  const toast = useToast();
 
   const [billing, setBilling] = useStickyState<BillingState | null>("billing", null);
   const [portalBusy, setPortalBusy] = useState(false);
@@ -84,12 +88,10 @@ export default function Settings() {
 
   async function saveProfile() {
     setSavingProfile(true);
-    setProfileSaved(false);
     try {
       const { user: u } = await api<{ user: any }>("/auth/profile", { method: "PATCH", body: JSON.stringify({ name, timezone }) });
       setUser(u);
-      setProfileSaved(true);
-      setTimeout(() => setProfileSaved(false), 2500);
+      toast("Profile saved");
     } finally {
       setSavingProfile(false);
     }
@@ -124,9 +126,8 @@ export default function Settings() {
   const fmt = (d: string | null) => (d ? new Date(d).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) : "—");
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-4 sm:px-6 py-8">
-        <h1 className="text-2xl font-semibold text-ink-900">Settings</h1>
+    <Page width="max-w-[960px]">
+      <PageHeader title="Settings" description="Your profile, plan and sign-in security." />
 
         {/* Profile */}
         <Section title="Profile" desc="How you appear in RelayFlow and the timezone used for scheduled tasks.">
@@ -155,21 +156,13 @@ export default function Settings() {
             <button onClick={saveProfile} disabled={savingProfile} className="btn-primary">
               {savingProfile ? <Loader2 className="animate-spin" size={18} /> : "Save changes"}
             </button>
-            {profileSaved && (
-              <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600">
-                <Check size={16} /> Saved
-              </span>
-            )}
           </div>
         </Section>
 
         {/* Plan & billing */}
         <Section title="Plan & billing" desc="Manage your subscription, payment method, and invoices.">
-          <div className="rounded-xl border border-line p-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="rounded-2xl border border-line p-5 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <span className="grid place-items-center h-11 w-11 rounded-xl bg-brand-50 text-brand-600">
-                <CreditCard size={20} />
-              </span>
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-ink-900">
@@ -271,7 +264,6 @@ export default function Settings() {
             Sign out
           </button>
         </Section>
-      </div>
-    </div>
+    </Page>
   );
 }

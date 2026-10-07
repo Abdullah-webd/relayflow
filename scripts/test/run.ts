@@ -30,7 +30,7 @@ async function main() {
   await waitForServer();
   console.log(`RelayFlow tests · database ${TEST_DB} · server ${API}`);
 
-  const suites = ["seo", "auth", "billing", "channels", ...(process.env.TEST_AI === "1" ? ["monitors-ai"] : [])];
+  const suites = ["seo", "auth", "billing", "channels", "autoreplies", ...(process.env.TEST_AI === "1" ? ["monitors-ai"] : [])];
   for (const name of suites) {
     try {
       const mod = await import(`./suites/${name}.ts`);

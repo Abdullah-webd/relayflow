@@ -263,3 +263,20 @@ body,
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(*), ::view-transition-new(*), ::view-transition-group(*) { animation-duration: 0s !important; }
 }
+
+/* ============================================================
+   Dashboard (app screens). Same type family as the landing page;
+   motion lives in Motion components, this is type and feedback.
+   ============================================================ */
+.rf-app {
+  font-family: "Funnel Sans", ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: normal;
+  color: rgb(var(--ink-800));
+}
+.rf-app .font-display { font-family: "Funnel Display", ui-sans-serif, system-ui, sans-serif; }
+.rf-app .tabular-nums { font-variant-numeric: tabular-nums; }
+/* Chart bars grow from the baseline on first view. */
+@media (prefers-reduced-motion: no-preference) {
+  .rf-bar { transform-origin: bottom; animation: rf-bar 620ms var(--ease-out-expo) both; animation-delay: calc(var(--i, 0) * 45ms); }
+}
+@keyframes rf-bar { from { transform: scaleY(0); } }

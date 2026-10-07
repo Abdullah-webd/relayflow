@@ -92,6 +92,51 @@ test.describe("dashboard (seeded accounts)", () => {
     expect(errors).toEqual([]);
   });
 
+  test("overview: home screen with the 7-day chart and setup checklist", async ({ page }) => {
+    const errors = collectErrors(page);
+    await signInAs(page, "trial");
+    await page.goto("/app");
+    await expect(page).toHaveURL(/\/app\/overview$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(/Good (morning|afternoon|evening)/);
+    await expect(page.getByRole("heading", { name: "Messages received" })).toBeVisible();
+    await expect(page.getByText("Get RelayFlow working for you")).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test("auto-reply: create one with its own groups, knowledge and rules, then go live", async ({ page }) => {
+    const errors = collectErrors(page);
+    await signInAs(page, "trial");
+    await page.goto("/app/auto-replies");
+    await page.getByRole("button", { name: "New auto-reply" }).first().click();
+    await page.locator("#ar-name").fill("Shop FAQs");
+    await page.getByRole("button", { name: "Create" }).click();
+    await expect(page).toHaveURL(/\/app\/auto-replies\/.+/);
+    await expect(page.getByText("To go live:")).toBeVisible();
+
+    // Can't go live yet: it says why.
+    await page.getByRole("switch", { name: "Live" }).click();
+    await expect(page.getByText(/Choose at least one group/)).toBeVisible();
+
+    await page.getByRole("checkbox").first().check();
+    await expect(page.getByText(/Answers in “/)).toBeVisible();
+    await page.getByLabel("Knowledge title").fill("Delivery");
+    await page.getByLabel("Knowledge text").fill("Delivery to Lekki costs N2,500.");
+    await page.getByRole("button", { name: "Add knowledge" }).click();
+    await expect(page.getByText("Delivery", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /Never promise delivery dates/ }).click();
+    await page.getByRole("button", { name: "Save rules" }).click();
+    await expect(page.getByText("Rules saved")).toBeVisible();
+
+    await page.getByRole("switch", { name: "Live" }).click();
+    await expect(page.getByText("Live", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("To go live:")).toBeHidden();
+
+    // Back on the list it shows as its own live auto-reply.
+    await page.getByRole("link", { name: "All auto-replies" }).click();
+    await expect(page.getByText("Shop FAQs")).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
   test("expired trial is sent to the paywall", async ({ page }) => {
     await signInAs(page, "expired");
     await page.goto("/app/chat");
@@ -101,7 +146,7 @@ test.describe("dashboard (seeded accounts)", () => {
 
   test("Starter plan: knowledge base shows the Pro upgrade", async ({ page }) => {
     await signInAs(page, "starter");
-    await page.goto("/app/knowledge");
+    await page.goto("/app/knowledge"); // old address redirects to Auto-replies
     await expect(page.getByText("Pro feature")).toBeVisible();
     await expect(page.getByRole("link", { name: /Upgrade to Pro/ })).toBeVisible();
   });

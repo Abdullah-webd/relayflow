@@ -124,6 +124,7 @@ export interface Destination {
   // explicitly turned on. Watermark tracks what we've already handled here.
   autoReplyEnabled?: boolean;
   autoReplyLastSeenAt?: Date | null;
+  responderId?: string | null; // the auto-reply that answers here (one per group)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -196,7 +197,7 @@ export interface Monitor {
   updatedAt: Date;
 }
 
-// A company's knowledge base: guardrails (what to answer / never answer) — one per user.
+// Legacy (before per-auto-reply settings): one set of guardrails per user. Migrated into a Responder.
 export interface KnowledgeBase {
   _id: string; // = userId (one per user)
   userId: string;
@@ -205,10 +206,23 @@ export interface KnowledgeBase {
   updatedAt: Date;
 }
 
+// One auto-reply: its own groups, knowledge and rules. A group belongs to at most one.
+export interface Responder {
+  _id: string;
+  userId: string;
+  name: string;
+  active: boolean;
+  instructions: string; // the business's rules for this auto-reply (what to answer / never answer)
+  destinationIds: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // A single uploaded/typed knowledge document (its extracted plain text).
 export interface KnowledgeDoc {
   _id: string;
   userId: string;
+  responderId?: string | null; // the auto-reply it belongs to
   title: string;
   source: "pdf" | "text";
   text: string;
@@ -220,6 +234,8 @@ export interface KnowledgeDoc {
 export interface AutoReply {
   _id: string;
   userId: string;
+  responderId?: string | null;
+  responderName?: string | null;
   platform: Platform;
   connectionId: string;
   destinationExternalId: string;
@@ -270,6 +286,7 @@ export const outbound = () => db().collection<Outbound>("outbound");
 export const scheduledTasks = () => db().collection<ScheduledTask>("scheduled_tasks");
 export const monitors = () => db().collection<Monitor>("monitors");
 export const knowledgeBase = () => db().collection<KnowledgeBase>("knowledge_base");
+export const responders = () => db().collection<Responder>("responders");
 export const knowledgeDocs = () => db().collection<KnowledgeDoc>("knowledge_docs");
 export const autoReplies = () => db().collection<AutoReply>("auto_replies");
 export const whatsappAuth = () => db().collection<WhatsAppAuth>("whatsapp_auth");
@@ -324,6 +341,8 @@ async function ensureIndexes(d: Db): Promise<void> {
   await safeIndex(d, "monitors", { active: 1, lastCheckedAt: 1 });
   await safeIndex(d, "monitors", { userId: 1 });
   await safeIndex(d, "knowledge_docs", { userId: 1, createdAt: -1 });
+  await safeIndex(d, "knowledge_docs", { responderId: 1 });
+  await safeIndex(d, "responders", { userId: 1 });
   await safeIndex(d, "auto_replies", { userId: 1, createdAt: -1 });
   await safeIndex(d, "whatsapp_auth", { connectionId: 1 });
 }

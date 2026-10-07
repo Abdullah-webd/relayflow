@@ -19,7 +19,14 @@ Start for tests: `npm run build`, then the harnesses start the server themselves
 ## Critical flows (e2e/critical-flows.spec.ts)
 - Public: home, pricing ($15/$30), legal pages, real 404
 - Sign-up requires Terms/Privacy consent; wrong password shows an error
-- Trial user: chat list, tab motion, instant return to Chat; expired trial → paywall; Starter → knowledge upgrade prompt
+- Trial user: Overview home (chart, setup checklist); chat list, tab motion, instant return to Chat
+- Auto-reply: create → pick a group → add knowledge → save rules → go live (blocked with a reason until ready)
+- Expired trial → paywall; Starter → auto-replies upgrade prompt (old /app/knowledge redirects)
+
+## Try the dashboard locally with demo data (never touches real data)
+- `TEST_DB_NAME=relayflow_demo_test npx tsx scripts/test/demo-seed.ts`
+- `TEST_DB_NAME=relayflow_demo_test TEST_PORT=8790 npx tsx scripts/test/serve.ts` → http://localhost:8790, demo@relayflow.test / demo-password
+- Screenshots of every page: `SHOTS_OUT=dir npx tsx scripts/test/shots.ts`
 
 ## Not covered automatically (needs real accounts or money)
 - Real WhatsApp/Telegram/Slack linking, real Stripe checkout/plan switch, real email delivery

@@ -93,7 +93,7 @@ async function appChecks(browser: import("puppeteer-core").Browser): Promise<num
   await page.setCookie({ name: "rf_session", value: token, domain: "localhost", path: "/" });
   await page.goto(`${API}/app/chat`, { waitUntil: "networkidle0" });
   await new Promise((r) => setTimeout(r, 800));
-  const rows = () => page.evaluate(() => [...document.querySelectorAll("div")].filter((d) => d.textContent === "Morning check-in" || d.textContent?.startsWith("Wholesale buyers")).length);
+  const rows = () => page.evaluate(() => [...document.querySelectorAll("span,div")].filter((d) => d.textContent === "Morning check-in" || d.textContent === "Wholesale buyers follow-up").length);
   check("dashboard: chat list renders", (await rows()) > 0);
   await page.screenshot({ path: `${OUT}/app-chat-1440.png` });
 
