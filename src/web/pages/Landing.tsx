@@ -5,6 +5,7 @@ import { Reveal } from "../components/Reveal";
 import { ChannelMark, CHANNEL_COLOR, CHANNEL_NAME, type Channel } from "../components/ChannelMark";
 import { useAuth } from "../lib/auth";
 import { PRICES } from "../lib/pricing";
+import { FAQS } from "../../shared/seo";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -86,32 +87,8 @@ const landingPlans = [
   },
 ];
 
-const faqs = [
-  {
-    q: "Is RelayFlow secure?",
-    a: "Yes. Sensitive credentials are encrypted at the field level, and Slack connects through its official OAuth sign-in. Anything the agent sends for you waits for your approval, and auto-replies only run on the channels you turn them on for.",
-  },
-  {
-    q: "Does it store my whole message history?",
-    a: "No. RelayFlow keeps only recent messages so it can answer questions and summarize. Channel messages are deleted automatically after 14 days, and it never archives your full history.",
-  },
-  {
-    q: "Can it send to all my channels at once?",
-    a: "Yes. Ask it to message one specific group or every connected channel at the same time. You see the exact message and destinations, and approve before anything is delivered.",
-  },
-  {
-    q: "How much does it cost?",
-    a: `Starter is $${PRICES.starter} a month and Pro is $${PRICES.pro} a month. Pro adds auto-replies from your knowledge base, a smarter AI model, and unlimited monitors and scheduled tasks. Every account starts with a 1-day free trial of Pro, no credit card required.`,
-  },
-  {
-    q: "Can I cancel anytime?",
-    a: "Yes. The free trial needs no card, so there's nothing to cancel if you decide it isn't for you. If you subscribe, cancel from Settings whenever you like. No contracts.",
-  },
-  {
-    q: "Which channels can I connect?",
-    a: "WhatsApp, Telegram and Slack. You can connect one or all three, and see at a glance which are live. Gmail support is coming soon.",
-  },
-];
+// FAQ copy is shared with the structured data Google reads (src/shared/seo.ts).
+const faqs = FAQS;
 
 const i = (n: number) => ({ "--i": n }) as CSSProperties;
 

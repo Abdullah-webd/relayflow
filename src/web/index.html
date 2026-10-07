@@ -3,19 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RelayFlow · Every business chat, answered from one place</title>
+    <!-- The server replaces this block with per-page tags (src/server/seo.ts). -->
+    <!--seo:start-->
+    <title>RelayFlow — AI agent for WhatsApp, Telegram &amp; Slack business chats</title>
     <meta
       name="description"
-      content="RelayFlow reads your WhatsApp, Telegram and Slack, tells you what matters, and drafts replies you approve before anything is sent."
+      content="RelayFlow is an AI agent for WhatsApp, Telegram and Slack. Ask what happened across every chat, get summaries, send to any group, set instant alerts and auto-reply from your knowledge base. Free 1-day trial."
     />
+    <!--seo:end-->
     <meta name="theme-color" content="#ffffff" />
-    <meta property="og:title" content="RelayFlow · Every business chat, answered from one place" />
-    <meta
-      property="og:description"
-      content="One AI agent across WhatsApp, Telegram and Slack. Ask what happened, send to every channel, approve everything first."
-    />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://userelayflow.com" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -25,6 +25,17 @@
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <main style="font-family: system-ui, sans-serif; max-width: 640px; margin: 48px auto; padding: 0 16px; line-height: 1.6">
+        <h1>RelayFlow — one AI agent for WhatsApp, Telegram and Slack</h1>
+        <p>
+          RelayFlow reads your business chats, tells you what needs attention, drafts replies you approve before anything is sent,
+          alerts you the moment something happens, and auto-replies to customers from your own knowledge base.
+        </p>
+        <p>Starter $15/month · Pro $30/month · 1-day free trial, no credit card required.</p>
+        <p><a href="/signup">Start free trial</a> · <a href="/pricing">Pricing</a> · <a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+      </main>
+    </noscript>
     <script type="module" src="/main.tsx"></script>
   </body>
 </html>

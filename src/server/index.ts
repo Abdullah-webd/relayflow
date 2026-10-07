@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import fs from "node:fs";
 import { env } from "./env";
+import { registerSeo, registerCanonicalHost } from "./seo";
 import { connectDb } from "./db";
 import { authRoutes } from "./routes/auth";
 import { chatRoutes } from "./routes/chat";
@@ -30,6 +31,7 @@ async function main() {
     bodyLimit: 8 * 1024 * 1024,
   });
 
+  registerCanonicalHost(app); // first, so it covers every route
   await app.register(cookie, { secret: env.sessionSecret });
   if (!env.isProd) {
     await app.register(cors, { origin: ["http://localhost:5173"], credentials: true });
@@ -61,17 +63,11 @@ async function main() {
   await app.register(monitorRoutes, { prefix: "/api" });
   await app.register(knowledgeRoutes, { prefix: "/api" });
 
-  // Serve the built React app in production (single Railway service).
+  // Serve the built React app in production (single Railway service). `index: false` so every
+  // page — including "/" — goes through the SEO handler that writes per-page head tags.
   if (fs.existsSync(publicDir)) {
-    await app.register(fastifyStatic, { root: publicDir });
-    app.setNotFoundHandler((req, reply) => {
-      if (req.raw.url && req.raw.url.startsWith("/api")) {
-        return reply.code(404).send({ error: "not_found" });
-      }
-      // Never cache the SPA shell so a new build's hashed assets are always picked up.
-      reply.header("Cache-Control", "no-store");
-      return reply.sendFile("index.html");
-    });
+    await app.register(fastifyStatic, { root: publicDir, index: false });
+    registerSeo(app, publicDir);
   }
 
   await app.listen({ host: "0.0.0.0", port: env.port });

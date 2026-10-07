@@ -11,7 +11,6 @@ export const CONTACT_TEL = "+447405655419";
 
 export function LegalLayout({ title, intro, toc, children }: { title: string; intro: ReactNode; toc: { id: string; label: string }[]; children: ReactNode }) {
   useEffect(() => {
-    document.title = `${title} · RelayFlow`;
     window.scrollTo(0, 0);
   }, [title]);
 

@@ -1,5 +1,4 @@
-// Display prices for static marketing copy. The server (src/server/billing/plans.ts) is the
-// source of truth for what Stripe charges; keep these in sync.
-export const PRICES = { starter: 15, pro: 30 } as const;
-// Kept for older imports: the top plan's price.
-export const PRICE_USD = PRICES.pro;
+// Display prices live in src/shared/seo.ts (also used for Google's structured data).
+// The server (src/server/billing/plans.ts) is the source of truth for what Stripe charges.
+export { PRICES } from "../../shared/seo";
+export const PRICE_USD = 30;

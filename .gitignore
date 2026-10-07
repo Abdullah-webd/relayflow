@@ -7,3 +7,4 @@ railway.env
 *.log
 .DS_Store
 .wa-auth/
+test-results/

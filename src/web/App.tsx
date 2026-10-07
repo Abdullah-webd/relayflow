@@ -1,7 +1,10 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { metaFor, NOT_FOUND_META } from "../shared/seo";
 import { useAuth, hasActivePlan } from "./lib/auth";
 import Landing from "./pages/Landing";
 import Pricing from "./pages/Pricing";
+import NotFound from "./pages/NotFound";
 import Privacy from "./pages/legal/Privacy";
 import Terms from "./pages/legal/Terms";
 import Login from "./pages/auth/Login";
@@ -45,7 +48,15 @@ function RequireActivePlan({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+function useRouteTitle() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    document.title = (metaFor(pathname) ?? NOT_FOUND_META).title;
+  }, [pathname]);
+}
+
 export default function App() {
+  useRouteTitle();
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
@@ -74,7 +85,7 @@ export default function App() {
         <Route path="tasks" element={<Tasks />} />
         <Route path="settings" element={<Settings />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

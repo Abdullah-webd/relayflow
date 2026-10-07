@@ -13,7 +13,12 @@
     "build": "vite build",
     "start": "tsx src/server/index.ts",
     "typecheck": "tsc --noEmit",
-    "eval": "tsx scripts/eval/run.ts"
+    "eval": "tsx scripts/eval/run.ts",
+    "test": "tsx scripts/test/run.ts",
+    "test:ai": "TEST_AI=1 tsx scripts/test/run.ts",
+    "test:visual": "tsx scripts/test/visual.ts",
+    "smoke:live": "tsx scripts/test/smoke-live.ts",
+    "verify": "npm run typecheck && npm run build && npm test && npm run test:visual"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
@@ -53,6 +58,7 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.0",
     "postcss": "^8.4.49",
+    "puppeteer-core": "^23.11.1",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"

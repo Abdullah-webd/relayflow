@@ -9,22 +9,23 @@
 :root {
   color-scheme: light;
 
-  /* Brand = the logo color (indigo). brand-600 passes AA (6.3:1) as text on white. */
-  --brand-50: 238 241 255;
-  --brand-100: 224 229 255;
-  --brand-200: 198 204 255;
-  --brand-300: 163 168 252;
-  --brand-400: 131 128 246;
-  --brand-500: 99 91 247;
-  --brand-600: 79 70 229;
-  --brand-700: 67 56 202;
-  --brand-800: 55 48 163;
-  --brand-900: 46 42 118;
+  /* Brand = the RelayFlow logo blue (#0573FE). brand-600 (#0566E0) is used for buttons/links
+     because white text on it passes WCAG AA (5.3:1); brand-500 is the exact logo blue. */
+  --brand-50: 238 245 255;
+  --brand-100: 220 234 255;
+  --brand-200: 182 212 255;
+  --brand-300: 132 183 255;
+  --brand-400: 69 147 255;
+  --brand-500: 5 115 254;
+  --brand-600: 5 102 224;
+  --brand-700: 4 83 184;
+  --brand-800: 6 67 143;
+  --brand-900: 7 29 64; /* logo navy */
 
-  /* Secondary accent = the logo cyan. Use sparingly. */
-  --accent-400: 34 193 214;
-  --accent-500: 18 176 201;
-  --accent-600: 14 143 166;
+  /* Secondary accents = the logo's cyan and teal dots. Use sparingly. */
+  --accent-400: 67 221 191;
+  --accent-500: 41 186 245;
+  --accent-600: 21 151 209;
 
   /* Cool-tinted neutrals. ink-500 passes AA (4.8:1) on white. */
   --ink-900: 18 21 27;
@@ -47,7 +48,7 @@
   --shadow-md: 0 2px 4px -2px rgb(18 21 27 / 0.06), 0 8px 16px -4px rgb(18 21 27 / 0.08);
   --shadow-lg: 0 4px 8px -4px rgb(18 21 27 / 0.08), 0 24px 48px -12px rgb(18 21 27 / 0.16);
   --shadow-frame: 0 0 0 1px rgb(18 21 27 / 0.06), 0 2px 4px -2px rgb(18 21 27 / 0.06),
-    0 24px 48px -16px rgb(18 21 27 / 0.18), 0 48px 96px -32px rgb(79 70 229 / 0.14);
+    0 24px 48px -16px rgb(18 21 27 / 0.18), 0 48px 96px -32px rgb(5 102 224 / 0.14);
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);

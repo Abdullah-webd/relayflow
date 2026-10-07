@@ -1,0 +1,26 @@
+# Checks the live site after every successful Railway deployment, and every 30 minutes.
+# Read-only: no accounts, payments or messages are created.
+name: Live smoke test
+
+on:
+  deployment_status:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    if: github.event_name != 'deployment_status' || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Wait for the new deployment to take traffic
+        if: github.event_name == 'deployment_status'
+        run: sleep 60
+      - run: npm run smoke:live
