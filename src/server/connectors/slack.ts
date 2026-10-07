@@ -34,19 +34,23 @@ async function client(connectionId: string): Promise<WebClient> {
 
 // ---- Names ----
 const nameCache = new Map<string, string>(); // `${connectionId}|${slackUserId}` → display name
+const noNameScope = new Set<string>(); // connections whose token lacks users:read (reconnect grants it)
 async function userName(slack: WebClient, connectionId: string, slackUserId?: string): Promise<string> {
   if (!slackUserId) return "Slack member";
   const key = `${connectionId}|${slackUserId}`;
   const hit = nameCache.get(key);
   if (hit) return hit;
+  if (noNameScope.has(connectionId)) return slackUserId;
   try {
     const res: any = await slack.users.info({ user: slackUserId });
     const p = res?.user?.profile;
     const name = p?.display_name || p?.real_name || res?.user?.real_name || res?.user?.name || slackUserId;
     nameCache.set(key, name);
     return name;
-  } catch {
-    return slackUserId; // token without users:read (reconnect Slack to grant it)
+  } catch (e) {
+    if ((e as any)?.data?.error === "missing_scope") noNameScope.add(connectionId);
+    else nameCache.set(key, slackUserId); // don't retry an unknown user on every message
+    return slackUserId;
   }
 }
 
@@ -117,18 +121,25 @@ export async function syncSlack(connectionId: string): Promise<void> {
     const oldestMs = Math.max(Date.now() - 14 * 24 * 60 * 60 * 1000, conn.syncedAt ? conn.syncedAt.getTime() - 120_000 : 0);
     const startedAt = new Date();
 
-    let cursor: string | undefined;
-    const convs: any[] = [];
-    do {
-      const res: any = await slack.users.conversations({
-        types: "public_channel,private_channel,im,mpim",
-        exclude_archived: true,
-        limit: 200,
-        cursor,
-      });
-      convs.push(...(res.channels ?? []));
-      cursor = res.response_metadata?.next_cursor || undefined;
-    } while (cursor);
+    // Connections authorized before private-message access was added lack im/mpim scopes:
+    // fall back to channels only (reconnecting Slack grants the rest).
+    const listConversations = async (types: string): Promise<any[]> => {
+      let cursor: string | undefined;
+      const out: any[] = [];
+      do {
+        const res: any = await slack.users.conversations({ types, exclude_archived: true, limit: 200, cursor });
+        out.push(...(res.channels ?? []));
+        cursor = res.response_metadata?.next_cursor || undefined;
+      } while (cursor);
+      return out;
+    };
+    let convs: any[];
+    try {
+      convs = await listConversations("public_channel,private_channel,im,mpim");
+    } catch (e) {
+      if ((e as any)?.data?.error !== "missing_scope") throw e;
+      convs = await listConversations("public_channel,private_channel");
+    }
 
     for (const conv of convs) {
       const name = await convName(slack, connectionId, conv);
