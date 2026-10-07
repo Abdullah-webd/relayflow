@@ -30,7 +30,7 @@ export async function runAutoReplyTick(): Promise<void> {
       const mine = recent.filter((r) => r.destinationExternalId === dest.externalId || conn.platform === "gmail");
       const fresh = mine
         .filter((r) => r.occurredAt.getTime() > since)
-        .filter((r) => r.senderName !== "You (via RelayFlow)")
+        .filter((r) => r.senderName !== "You (via RelayFlow)" && r.senderName !== "You") // never reply to ourselves
         .sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
 
       const newest = mine.reduce((mx, r) => Math.max(mx, r.occurredAt.getTime()), since);

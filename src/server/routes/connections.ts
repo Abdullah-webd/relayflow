@@ -6,8 +6,9 @@ import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
 import { listUserConnections, disconnectConnection } from "../connectors/manager";
 import { startWhatsapp, getWhatsappQr, getWhatsappPhase } from "../connectors/whatsapp";
+import { isLeader } from "../runtime/leader";
 import { startTelegram, verifyTelegramCode, verifyTelegram2FA } from "../connectors/telegram";
-import { slackAuthUrl, completeSlackOAuth, readState as slackState } from "../connectors/slack";
+import { slackAuthUrl, completeSlackOAuth, readState as slackState, verifySlackSignature, handleSlackEvent } from "../connectors/slack";
 import { gmailAuthUrl, completeGmailOAuth, readState as gmailState } from "../connectors/gmail";
 
 const redirectDone = (platform: string) => `${env.webBaseUrl || ""}/app/connections?connected=${platform}`;
@@ -49,7 +50,8 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   // ---------- WhatsApp ----------
-  app.post("/connections/whatsapp", { preHandler: requireActivePlan }, async (req) => {
+  app.post("/connections/whatsapp", { preHandler: requireActivePlan }, async (req, reply) => {
+    if (!isLeader()) return reply.code(503).send({ error: "restarting", detail: "RelayFlow is restarting — please try again in a few seconds." });
     const userId = req.userId!;
     const now = new Date();
     let conn = await connections().findOne({ userId, platform: "whatsapp" });
@@ -126,6 +128,19 @@ export async function connectionRoutes(app: FastifyInstance) {
   });
 
   // ---------- Slack OAuth ----------
+  // Slack Events API (public; authenticated by Slack's request signature). Slack expects a fast
+  // 200, so the message is processed after replying.
+  app.post("/slack/events", async (req, reply) => {
+    const raw = (req as any).rawBody as string | undefined;
+    const ok = raw && verifySlackSignature(raw, req.headers["x-slack-request-timestamp"] as string, req.headers["x-slack-signature"] as string);
+    if (!ok) return reply.code(401).send({ error: "bad_signature" });
+    const body = req.body as any;
+    if (body?.type === "url_verification") return reply.send({ challenge: body.challenge });
+    reply.send({ ok: true });
+    handleSlackEvent(body).catch((e) => console.error(`[slack] event failed: ${(e as Error).message}`));
+    return reply;
+  });
+
   app.get("/connections/slack/start", { preHandler: requireActivePlan }, async (req, reply) => {
     if (!env.slack.clientId) return reply.code(400).send({ error: "not_configured", detail: "Slack is not configured." });
     return { url: slackAuthUrl(req.userId!) };

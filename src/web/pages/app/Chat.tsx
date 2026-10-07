@@ -583,8 +583,8 @@ function MessageView({
               </div>
               <div className="mt-0.5 text-xs text-ink-400">
                 {r.mode === "absence"
-                  ? `Alerts you if it hasn't happened within ${r.absence_hours}h · checks every ${r.interval_minutes} min`
-                  : `Checks every ${r.interval_minutes} min · emails you only when it matches`}
+                  ? `Alerts you if it hasn't happened within ${r.absence_hours}h`
+                  : "Checks new messages as they arrive · emails you within seconds when it matches"}
               </div>
               <div className="mt-3">
                 <button onClick={() => onApproveMonitor(msg.id, key, r)} className="btn-primary h-10 px-4">Approve &amp; start monitoring</button>

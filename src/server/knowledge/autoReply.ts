@@ -93,7 +93,7 @@ async function deliverReply(msg: InboundMessage, answer: string): Promise<boolea
 export async function handleInbound(msg: InboundMessage): Promise<{ replied: boolean; reason: string }> {
   try {
     // Ignore our own messages / empty text.
-    if (!msg.text?.trim() || /^You \(via RelayFlow\)/.test(msg.senderName)) return { replied: false, reason: "ignored" };
+    if (!msg.text?.trim() || /^You( \(via RelayFlow\))?$/.test(msg.senderName)) return { replied: false, reason: "ignored" };
 
     // Paywall guardrail: no auto-replies without an active trial or subscription.
     if (!(await userHasAccessById(msg.userId))) return { replied: false, reason: "subscription required" };

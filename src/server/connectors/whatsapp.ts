@@ -10,13 +10,9 @@ import QRCode from "qrcode";
 import pino from "pino";
 import { whatsappAuth, connections, destinations } from "../db";
 import { encryptString, decryptString } from "../lib/crypto";
-import {
-  heartbeat,
-  isDestinationSelected,
-  recordMessage,
-  setConnectionStatus,
-  upsertDestination,
-} from "./store";
+import { heartbeat, setConnectionStatus, upsertDestination } from "./store";
+import { ingestMessage, type ChatKind } from "./ingest";
+import { isLeader } from "../runtime/leader";
 
 const logger = pino({ level: "silent" });
 
@@ -36,6 +32,8 @@ const sessions = new Map<string, WaSession>();
 // Baileys queries WhatsApp for group metadata on every group send and BLOCKS on it;
 // caching that metadata (per the Baileys docs) is what makes group sends actually return.
 const groupMetaCache = new Map<string, any>();
+// Contact display names seen via contacts/history events, per connection (for private chats).
+const contactNames = new Map<string, string>();
 const RECONNECT_BASE_MS = 3_000;
 const RECONNECT_MAX_MS = 60_000;
 
@@ -110,6 +108,46 @@ async function mongoAuthState(connectionId: string): Promise<{ state: Authentica
   return { state, saveCreds: () => write("creds", state.creds) };
 }
 
+/** groups → "group"; private chats (phone or LID addressing) → "dm"; everything else ignored. */
+function chatKindOf(jid: string | null | undefined): ChatKind | null {
+  if (!jid) return null;
+  if (jid.endsWith("@g.us")) return "group";
+  if (jid.endsWith("@s.whatsapp.net") || jid.endsWith("@lid")) return "dm";
+  return null; // status@broadcast, newsletters, broadcast lists
+}
+
+function rememberContact(connectionId: string, c: any) {
+  const name = c?.name || c?.notify || c?.verifiedName;
+  if (c?.id && name) contactNames.set(`${connectionId}|${c.id}`, String(name));
+}
+
+async function ingestWaMessage(userId: string, connectionId: string, message: any, history: boolean): Promise<void> {
+  const jid: string | undefined = message?.key?.remoteJid;
+  const kind = chatKindOf(jid);
+  if (!kind || !jid) return;
+  const text = messageText(message.message).trim();
+  if (!text) return;
+  const fromMe = Boolean(message.key.fromMe);
+  const seconds = Number(message.messageTimestamp ?? Math.floor(Date.now() / 1000));
+  let chatName: string | null = null;
+  if (kind === "group") chatName = groupMetaCache.get(jid)?.subject ?? null;
+  else chatName = (!fromMe && message.pushName) || contactNames.get(`${connectionId}|${jid}`) || null;
+  await ingestMessage({
+    userId,
+    connectionId,
+    platform: "whatsapp",
+    chatId: jid,
+    chatName,
+    chatKind: kind,
+    messageId: String(message.key.id),
+    senderName: message.pushName || (kind === "dm" ? chatName : null) || "WhatsApp participant",
+    fromMe,
+    text,
+    occurredAt: new Date(seconds * 1000),
+    history,
+  });
+}
+
 async function syncGroups(userId: string, connectionId: string, socket: WASocket): Promise<void> {
   try {
     const groups = await socket.groupFetchAllParticipating();
@@ -130,6 +168,8 @@ async function syncGroups(userId: string, connectionId: string, socket: WASocket
 }
 
 export async function startWhatsapp(userId: string, connectionId: string, attempt = 0): Promise<void> {
+  // Only the server holding the background lock may open WhatsApp sessions (see runtime/leader.ts).
+  if (!isLeader()) throw new Error("RelayFlow is restarting — please try again in a few seconds.");
   const prior = sessions.get(connectionId);
   if (prior) teardown(prior);
 
@@ -209,54 +249,29 @@ export async function startWhatsapp(userId: string, connectionId: string, attemp
     }
   });
 
+  // Every message — groups AND private chats, including ones you send from your phone —
+  // goes through the shared pipeline (store + instant auto-replies/monitors).
   socket.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify" && type !== "append") return;
     for (const message of messages) {
-      const jid = message.key.remoteJid;
-      if (!jid?.endsWith("@g.us") || message.key.fromMe) continue; // groups only, inbound only
-      const text = messageText(message.message).trim();
-      if (!text) continue;
-      if (!(await isDestinationSelected(connectionId, jid))) continue;
-      const seconds = Number(message.messageTimestamp ?? Math.floor(Date.now() / 1000));
-      const senderName = message.pushName ?? "WhatsApp participant";
-      await recordMessage({
-        userId,
-        connectionId,
-        platform: "whatsapp",
-        destinationId: jid,
-        destinationName: jid,
-        externalId: `${jid}:${message.key.id}`,
-        senderName,
-        direction: "inbound",
-        text,
-        occurredAt: new Date(seconds * 1000),
-      });
-
-      // Real-time auto-reply: if this group has auto-reply on, answer immediately
-      // (dynamic import avoids a circular dependency at module load).
-      try {
-        const dest = await destinations().findOne({ connectionId, externalId: jid });
-        if (dest?.autoReplyEnabled) {
-          const { handleInbound } = await import("../knowledge/autoReply");
-          await destinations()
-            .updateOne({ _id: dest._id }, { $set: { autoReplyLastSeenAt: new Date(seconds * 1000) } })
-            .catch(() => undefined); // move the poller's watermark so it won't double-answer
-          handleInbound({
-            userId,
-            platform: "whatsapp",
-            connectionId,
-            destinationExternalId: jid,
-            destinationName: dest.name,
-            senderName,
-            text,
-          }).catch((e) => console.error(`[whatsapp] auto-reply failed: ${(e as Error).message}`));
-        }
-      } catch (error) {
-        console.error(`[whatsapp] auto-reply hook error: ${(error as Error).message}`);
-      }
+      await ingestWaMessage(userId, connectionId, message, type !== "notify").catch((e) =>
+        console.error(`[whatsapp] ingest failed: ${(e as Error).message}`),
+      );
     }
     heartbeat(connectionId).catch(() => undefined);
   });
+
+  // Recent history WhatsApp sends right after linking/reconnecting: store it (no alerts).
+  socket.ev.on("messaging-history.set", async ({ messages, contacts }: any) => {
+    for (const c of contacts ?? []) rememberContact(connectionId, c);
+    let stored = 0;
+    for (const message of messages ?? []) {
+      await ingestWaMessage(userId, connectionId, message, true).then(() => stored++).catch(() => undefined);
+    }
+    if (messages?.length) console.info(`[whatsapp] history sync connection=${connectionId.slice(-8)} messages=${messages.length}`);
+  });
+  socket.ev.on("contacts.upsert", (contacts: any[]) => contacts.forEach((c) => rememberContact(connectionId, c)));
+  socket.ev.on("contacts.update", (contacts: any[]) => contacts.forEach((c) => rememberContact(connectionId, c)));
 
   // Keep the group-metadata cache fresh so group sends stay fast and never block.
   socket.ev.on("groups.update", async (updates) => {
@@ -325,6 +340,12 @@ export async function disconnectWhatsapp(connectionId: string): Promise<void> {
   await setConnectionStatus(connectionId, "disconnected", { lastError: null });
 }
 
+/** Close every live session WITHOUT logging out (another server is taking over). */
+export async function stopAllWhatsapp(): Promise<void> {
+  for (const session of sessions.values()) teardown(session);
+  sessions.clear();
+}
+
 export async function resumeWhatsapp(): Promise<void> {
   const rows = await connections()
     .find({ platform: "whatsapp", status: { $in: ["connected", "connecting", "qr"] } })
@@ -342,3 +363,6 @@ export async function resumeWhatsapp(): Promise<void> {
     );
   }
 }
+
+// Exposed for tests.
+export { ingestWaMessage as _ingestWaMessage };

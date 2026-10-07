@@ -100,6 +100,9 @@ export interface Connection {
   encryptedCredentials: string | null;
   lastError: string | null;
   heartbeatAt: Date | null;
+  slackUserId?: string | null; // Slack: the authorizing user's id (maps Events API payloads)
+  syncedAt?: Date | null; // last successful catch-up/backfill of recent messages
+  liveEventsAt?: Date | null; // last real-time event received (Slack Events API)
   // Auto-reply: when enabled, the AI answers incoming messages on this channel from the
   // knowledge base (only when confident). Watermark tracks what we've already handled.
   autoReplyEnabled?: boolean;
@@ -271,6 +274,12 @@ export const knowledgeDocs = () => db().collection<KnowledgeDoc>("knowledge_docs
 export const autoReplies = () => db().collection<AutoReply>("auto_replies");
 export const whatsappAuth = () => db().collection<WhatsAppAuth>("whatsapp_auth");
 export const appConfig = () => db().collection<AppConfig>("app_config");
+export interface Lock {
+  _id: string;
+  holder: string;
+  expiresAt: Date;
+}
+export const locks = () => db().collection<Lock>("locks");
 
 /**
  * Create an index, but never crash the whole server if an equivalent index already
@@ -306,6 +315,7 @@ async function ensureIndexes(d: Db): Promise<void> {
   await safeIndex(d, "connections", { userId: 1, platform: 1 });
   await safeIndex(d, "destinations", { connectionId: 1, externalId: 1 }, { unique: true });
   await safeIndex(d, "channel_messages", { userId: 1, platform: 1, occurredAt: -1 });
+  await safeIndex(d, "channel_messages", { connectionId: 1, occurredAt: -1 });
   await safeIndex(d, "channel_messages", { connectionId: 1, externalId: 1 }, { unique: true });
   // Keep the recent-message cache small: auto-expire after 14 days.
   await safeIndex(d, "channel_messages", { occurredAt: 1 }, { expireAfterSeconds: 60 * 60 * 24 * 14 });

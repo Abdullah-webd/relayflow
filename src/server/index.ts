@@ -15,8 +15,9 @@ import { taskRoutes } from "./routes/tasks";
 import { monitorRoutes } from "./routes/monitors";
 import { knowledgeRoutes } from "./routes/knowledge";
 import { billingRoutes, stripeWebhookHandler } from "./routes/billing";
-import { resumeConnections } from "./connectors/manager";
-import { startScheduler } from "./scheduler";
+import { resumeConnections, stopConnections } from "./connectors/manager";
+import { runAsLeader, releaseLeadership } from "./runtime/leader";
+import { startScheduler, stopScheduler } from "./scheduler";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = resolve(here, "../../dist/public");
@@ -76,15 +77,39 @@ async function main() {
   await app.listen({ host: "0.0.0.0", port: env.port });
   console.log(`RelayFlow server listening on http://localhost:${env.port}`);
 
-  // Background services (best-effort; never crash the server). DISABLE_BACKGROUND=true runs
-  // the API only — for local testing against the production database without starting a
-  // second copy of the channel connections or the scheduler.
+  // Background services: channel sessions, scheduler, monitors. Only ONE server may run them
+  // (see runtime/leader.ts) — two servers sharing a session get it revoked by WhatsApp/Telegram.
+  // DISABLE_BACKGROUND=true runs the API only (local testing against the production database).
   if (process.env.DISABLE_BACKGROUND === "true") {
     console.log("[server] background services disabled (DISABLE_BACKGROUND=true)");
   } else {
-    resumeConnections().catch((error) => console.error("[connectors] resume failed", error));
-    startScheduler();
+    runAsLeader(
+      () => {
+        resumeConnections().catch((error) => console.error("[connectors] resume failed", error));
+        startScheduler();
+      },
+      () => {
+        stopScheduler();
+        stopConnections().catch(() => undefined);
+      },
+    ).catch((error) => console.error("[leader] failed", error));
   }
+
+  // On deploy, Railway stops the old server: close sessions WITHOUT logging out and release the
+  // lock so the new server takes over within seconds.
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.info(`[server] ${signal}: handing over channel connections`);
+    stopScheduler();
+    await stopConnections().catch(() => undefined);
+    await releaseLeadership();
+    await app.close().catch(() => undefined);
+    process.exit(0);
+  };
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
+  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
 main().catch((error) => {

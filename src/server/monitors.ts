@@ -104,15 +104,43 @@ async function runMonitor(m: Monitor): Promise<void> {
   await monitors().updateOne({ _id: m._id }, { $set: patch });
 }
 
-/** Called on every scheduler tick: run every active monitor whose interval is due. */
+// One run per monitor at a time (an instant trigger and the safety-net tick can overlap).
+const running = new Set<string>();
+async function runMonitorOnce(m: Monitor): Promise<void> {
+  if (running.has(m._id)) return;
+  running.add(m._id);
+  try {
+    await runMonitor(m);
+  } catch (e) {
+    console.error(`[monitor] ${m._id} failed: ${(e as Error).message}`);
+  } finally {
+    running.delete(m._id);
+  }
+}
+
+/** Safety net, every scheduler tick: run monitors whose interval is due (and absence deadlines). */
 export async function runDueMonitors(): Promise<void> {
   const now = new Date();
-  const active = await monitors().find({ active: true }).limit(100).toArray();
+  const active = await monitors().find({ active: true }).limit(500).toArray();
   const due = active.filter((m) => {
     const every = Math.max(MIN_INTERVAL_MINUTES, m.intervalMinutes) * 60_000;
     return !m.lastCheckedAt || now.getTime() - m.lastCheckedAt.getTime() >= every;
   });
-  for (const m of due) {
-    await runMonitor(m).catch((e) => console.error(`[monitor] ${m._id} failed: ${(e as Error).message}`));
-  }
+  for (const m of due) await runMonitorOnce(m);
+}
+
+// Instant monitors: a new message wakes this user's monitors for that platform. A short
+// debounce batches a burst of messages into one AI check instead of one per message.
+const MONITOR_DEBOUNCE_MS = 10_000;
+const pendingTriggers = new Map<string, ReturnType<typeof setTimeout>>();
+export function triggerMonitors(userId: string, platform: string): void {
+  const key = `${userId}:${platform}`;
+  if (pendingTriggers.has(key)) return;
+  const timer = setTimeout(async () => {
+    pendingTriggers.delete(key);
+    const list = await monitors().find({ userId, platform: platform as Platform, active: true }).toArray();
+    for (const m of list) await runMonitorOnce(m);
+  }, MONITOR_DEBOUNCE_MS);
+  timer.unref?.();
+  pendingTriggers.set(key, timer);
 }

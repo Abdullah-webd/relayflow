@@ -186,7 +186,7 @@ export default function Tasks() {
                     {m.group ? ` · ${m.group}` : ""} — “{m.condition}”
                   </div>
                   <div className="text-xs text-ink-400 mt-0.5">
-                    {m.mode === "absence" ? "Absence alert" : "Notify on match"} · every {m.intervalMinutes} min
+                    {m.mode === "absence" ? "Absence alert" : "Instant alert on match"}
                     {m.lastCheckedAt && ` · last checked ${new Date(m.lastCheckedAt).toLocaleString()}`}
                     {m.lastResult && ` · ${m.lastResult}`}
                   </div>

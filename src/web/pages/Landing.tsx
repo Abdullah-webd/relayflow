@@ -618,12 +618,12 @@ export default function Landing() {
               </Reveal>
 
               <Reveal className="lg:col-span-3 flex">
-                <Tile className="w-full" title="Monitors that email you" body="Tell it what to watch for. It checks on a schedule and emails you only when it happens.">
+                <Tile className="w-full" title="Monitors that email you" body="Tell it what to watch for. It checks every new message as it arrives and emails you within seconds when it happens.">
                   <MiniCard className="p-3.5">
                     <div className="flex items-center gap-2 text-[13px] text-ink-900 font-medium">
                       <Radar size={14} className="text-ink-500" /> Someone asks about bulk pricing
                     </div>
-                    <p className="mt-1 text-[12px] text-ink-500">Wholesale Buyers · checks every 30 min</p>
+                    <p className="mt-1 text-[12px] text-ink-500">Wholesale Buyers · instant alerts</p>
                     <div className="mt-3 flex items-start gap-2.5 rounded-lg bg-surface px-3 py-2.5 text-[13px] text-ink-700">
                       <Mail size={14} className="mt-0.5 shrink-0 text-brand-600" />
                       <span>

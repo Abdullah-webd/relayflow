@@ -54,20 +54,20 @@ export const tools: ToolDef[] = [
   {
     name: "get_recent_messages",
     description:
-      "Read a small, recent slice of messages from the user's connected channels. Use `group` to read a SPECIFIC group/channel by name (e.g. 'Dev Syndicate'). Only recent messages are available (roughly the last week), never full history.",
+      "Read recent messages from the user's connected channels, newest first — groups, channels AND private chats. Messages the user sent themselves have sender 'You'. Use `group` to read a SPECIFIC group, channel or person by name (e.g. 'Dev Syndicate', 'Chidi'). Messages are kept for 14 days.",
     parameters: {
       type: "object",
       properties: {
         platform: { type: ["string", "null"], enum: [...PLATFORMS, null], description: "Limit to one platform, or null for all connected channels." },
         group: { type: ["string", "null"], description: "A specific group/channel name (or id) to read from, or null for the user's selected channels." },
-        limit: { type: "integer", minimum: 1, maximum: 30, description: "How many recent messages to return." },
+        limit: { type: "integer", minimum: 1, maximum: 50, description: "How many recent messages to return (25 is a good default)." },
       },
       required: ["platform", "group", "limit"],
       additionalProperties: false,
     },
     handler: async (userId, args) => {
       const platform = args.platform && PLATFORMS.includes(args.platform) ? (args.platform as Platform) : undefined;
-      const messages = await getRecentMessages(userId, { platform, group: args.group, limit: args.limit ?? 15 });
+      const messages = await getRecentMessages(userId, { platform, group: args.group, limit: args.limit ?? 25 });
       return {
         count: messages.length,
         messages: messages.map((m) => ({
@@ -143,7 +143,7 @@ export const tools: ToolDef[] = [
   {
     name: "prepare_monitor",
     description:
-      "Prepare a MONITOR the user must approve. Use this when the user asks to WATCH a channel and be told when something happens — e.g. 'let me know when someone asks about pricing in the Dev group', 'watch the Wholesale Buyers group for a quote request', 'tell me if the delivery confirmation doesn't arrive by tomorrow'. RelayFlow checks on an interval (default 30 min, minimum 15) and emails the user ONLY when the condition is met — it does NOT notify on every message. Prefer this over prepare_schedule whenever the user wants ongoing watching/notifying based on a condition rather than a fixed-time action.",
+      "Prepare a MONITOR the user must approve. Use this when the user asks to WATCH a channel and be told when something happens — e.g. 'let me know when someone asks about pricing in the Dev group', 'watch the Wholesale Buyers group for a quote request', 'tell me if the delivery confirmation doesn't arrive by tomorrow'. RelayFlow checks each new message the moment it arrives and emails the user within seconds, ONLY when the condition is met — it does NOT notify on every message. Prefer this over prepare_schedule whenever the user wants ongoing watching/notifying based on a condition rather than a fixed-time action.",
     parameters: {
       type: "object",
       properties: {
@@ -156,7 +156,7 @@ export const tools: ToolDef[] = [
           enum: ["match", "absence"],
           description: "'match' = notify when this happens. 'absence' = notify if this has NOT happened by the deadline.",
         },
-        interval_minutes: { type: "integer", minimum: 15, maximum: 1440, description: "How often to check, in minutes. Default 30. Minimum 15." },
+        interval_minutes: { type: "integer", minimum: 15, maximum: 1440, description: "Safety-net re-check interval in minutes (alerts are already instant when messages arrive). Use 30." },
         absence_hours: { type: ["number", "null"], description: "For 'absence' mode ONLY: how many hours to wait before alerting that it didn't happen. Use null for 'match' mode." },
       },
       required: ["title", "platform", "group", "condition", "mode", "interval_minutes", "absence_hours"],

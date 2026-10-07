@@ -6,6 +6,8 @@ import { sendEmail } from "./lib/email";
 import { runDueMonitors } from "./monitors";
 import { runAutoReplyTick } from "./knowledge/autoReplyPoller";
 import { userHasAccessById, withinQuota } from "./billing/access";
+import { isLeader } from "./runtime/leader";
+import { pollSlack } from "./connectors/slack";
 
 async function runTask(task: ScheduledTask): Promise<void> {
   // Paywall guardrail: no trial/subscription means the agent does no work for this account.
@@ -74,9 +76,18 @@ async function runTask(task: ScheduledTask): Promise<void> {
   await scheduledTasks().updateOne({ _id: task._id }, { $set: patch });
 }
 
+let cronTask: ReturnType<typeof cron.schedule> | null = null;
+
+export function stopScheduler(): void {
+  cronTask?.stop();
+  cronTask = null;
+}
+
 export function startScheduler(): void {
-  // Tick once a minute; run everything that is due.
-  cron.schedule("* * * * *", async () => {
+  if (cronTask) return;
+  // Tick once a minute; run everything that is due (lock holder only — see runtime/leader.ts).
+  cronTask = cron.schedule("* * * * *", async () => {
+    if (!isLeader()) return;
     const now = new Date();
     const due = await scheduledTasks().find({ active: true, runAt: { $lte: now } }).limit(25).toArray();
     for (const task of due) {
@@ -86,6 +97,8 @@ export function startScheduler(): void {
     runDueMonitors().catch((error) => console.error("[monitors] tick failed", error));
     // Auto-reply: answer new inbound messages on enabled channels from the knowledge base.
     runAutoReplyTick().catch((error) => console.error("[auto-reply] tick failed", error));
+    // Slack safety net: poll every 2 minutes when Slack's live events aren't arriving.
+    pollSlack().catch((error) => console.error("[slack] poll failed", error));
   });
   console.log("[scheduler] started (1-minute tick)");
 }

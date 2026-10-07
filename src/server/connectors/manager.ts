@@ -4,6 +4,7 @@ import * as wa from "./whatsapp";
 import * as tg from "./telegram";
 import * as slack from "./slack";
 import * as gmail from "./gmail";
+import { messageKey, noteOwnSend } from "./ingest";
 
 // Forgiving group matcher: ignores case, spaces, punctuation and emoji so
 // "Study Master", "studymaster", "STUDYMASTER 📚" all match the same group.
@@ -30,7 +31,12 @@ export interface RecentMessage {
 }
 
 export async function resumeConnections(): Promise<void> {
-  await Promise.allSettled([wa.resumeWhatsapp(), tg.resumeTelegram()]);
+  await Promise.allSettled([wa.resumeWhatsapp(), tg.resumeTelegram(), slack.resumeSlack()]);
+}
+
+/** Close live sessions without logging out (used when this server hands over to a new one). */
+export async function stopConnections(): Promise<void> {
+  await Promise.allSettled([wa.stopAllWhatsapp(), tg.stopAllTelegram()]);
 }
 
 export interface ConnectionView {
@@ -65,69 +71,67 @@ export async function connectedPlatforms(userId: string): Promise<Connection[]> 
   return connections().find({ userId, status: "connected" }).toArray();
 }
 
-/** Pull a small, recent slice of messages across the user's selected destinations. */
+/**
+ * Recent messages across the user's chats (groups, channels and private chats), newest first.
+ * Every channel stores messages as they arrive (see ingest.ts), so this reads the store; for a
+ * Telegram/Slack connection with nothing stored yet it falls back to a live fetch.
+ */
 export async function getRecentMessages(
   userId: string,
   opts: { platform?: Platform; limit?: number; group?: string | null } = {},
 ): Promise<RecentMessage[]> {
-  const limit = Math.min(opts.limit ?? 15, 50);
+  const limit = Math.min(opts.limit ?? 25, 60);
   const query: Record<string, unknown> = { userId, status: "connected" };
   if (opts.platform) query.platform = opts.platform;
   const conns = await connections().find(query).toArray();
   const results: RecentMessage[] = [];
 
   for (const conn of conns) {
-    let dests = await destinations().find({ connectionId: conn._id }).limit(300).toArray();
-    if (opts.group?.trim()) {
-      dests = matchByGroup(dests, opts.group);
-    } else {
-      dests = dests.filter((d) => d.selected !== false).slice(0, 20);
-    }
     try {
-      if (conn.platform === "whatsapp") {
-        const nameById = new Map(dests.map((d) => [d.externalId, d.name]));
-        const msgs = await channelMessages()
-          .find({ connectionId: conn._id, destinationId: { $in: dests.map((d) => d.externalId) } })
-          .sort({ occurredAt: -1 })
-          .limit(limit)
-          .toArray();
-        for (const m of msgs) {
-          results.push({
-            platform: "whatsapp",
-            connectionId: conn._id,
-            destinationName: nameById.get(m.destinationId) || m.destinationName,
-            destinationExternalId: m.destinationId,
-            senderName: m.senderName,
-            text: m.text,
-            occurredAt: m.occurredAt,
-          });
-        }
-      } else if (conn.platform === "telegram") {
-        for (const d of dests.slice(0, 6)) {
-          const recent = await tg.fetchTelegramRecent(conn._id, d.externalId, Math.min(limit, 12));
+      const dests = await destinations().find({ connectionId: conn._id }).toArray();
+      const nameById = new Map(dests.map((d) => [d.externalId, d.name]));
+      const msgQuery: Record<string, unknown> = { connectionId: conn._id };
+      if (opts.group?.trim()) {
+        const matched = matchByGroup(dests, opts.group);
+        if (!matched.length) continue;
+        msgQuery.destinationId = { $in: matched.map((d) => d.externalId) };
+      } else {
+        const excluded = dests.filter((d) => d.selected === false).map((d) => d.externalId);
+        if (excluded.length) msgQuery.destinationId = { $nin: excluded };
+      }
+      const msgs = await channelMessages().find(msgQuery).sort({ occurredAt: -1 }).limit(limit).toArray();
+      for (const m of msgs) {
+        results.push({
+          platform: conn.platform,
+          connectionId: conn._id,
+          destinationName: nameById.get(m.destinationId) || m.destinationName,
+          destinationExternalId: m.destinationId,
+          senderName: m.senderName,
+          text: m.text,
+          occurredAt: m.occurredAt,
+        });
+      }
+
+      // Nothing stored yet for this Telegram/Slack connection (e.g. right after connecting):
+      // read live from the most relevant chats so the answer is never falsely empty.
+      if (msgs.length === 0 && (conn.platform === "telegram" || conn.platform === "slack")) {
+        const pool = opts.group?.trim() ? matchByGroup(dests, opts.group) : dests.filter((d) => d.selected !== false);
+        for (const d of pool.slice(0, 8)) {
+          const recent =
+            conn.platform === "telegram"
+              ? await tg.fetchTelegramRecent(conn._id, d.externalId, 10)
+              : await slack.fetchSlackRecent(conn._id, d.externalId, 10);
           recent.forEach((r) =>
-            results.push({ platform: "telegram", connectionId: conn._id, destinationName: d.name, destinationExternalId: d.externalId, ...r }),
+            results.push({ platform: conn.platform, connectionId: conn._id, destinationName: d.name, destinationExternalId: d.externalId, ...r }),
           );
         }
-      } else if (conn.platform === "slack") {
-        for (const d of dests.slice(0, 6)) {
-          const recent = await slack.fetchSlackRecent(conn._id, d.externalId, Math.min(limit, 12));
-          recent.forEach((r) =>
-            results.push({ platform: "slack", connectionId: conn._id, destinationName: d.name, destinationExternalId: d.externalId, ...r }),
-          );
-        }
-      } else if (conn.platform === "gmail") {
-        const recent = await gmail.fetchGmailRecent(conn._id, Math.min(limit, 15));
-        recent.forEach((r) =>
-          results.push({ platform: "gmail", connectionId: conn._id, destinationName: conn.displayName, destinationExternalId: conn.externalId || "", ...r }),
-        );
       }
     } catch (error) {
-      console.error(`[manager] recent fetch failed for ${conn.platform}: ${(error as Error).message}`);
+      console.error(`[manager] recent read failed for ${conn.platform}: ${(error as Error).message}`);
     }
   }
 
-  return results.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, limit * 2);
+  return results.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime()).slice(0, limit);
 }
 
 export interface DestinationView {
@@ -190,7 +194,10 @@ export async function resolveSendTargets(userId: string, platforms: string[], gr
   for (const p of targetPlatforms) {
     const conn = connected.find((c) => c.platform === p);
     if (!conn) continue;
-    const dests = (await destinations().find({ connectionId: conn._id }).toArray()).filter((d) => d.selected !== false);
+    // Broadcasts go to groups/channels only — never to private chats (those need a name).
+    const dests = (await destinations().find({ connectionId: conn._id }).toArray()).filter(
+      (d) => d.selected !== false && d.kind !== "dm",
+    );
     for (const d of dests) targets.push({ platform: p, connectionId: conn._id, externalId: d.externalId, name: d.name });
   }
   return targets;
@@ -206,6 +213,7 @@ export interface SendResult {
 
 async function deliverOne(userId: string, t: SendTarget, content: string): Promise<SendResult> {
   try {
+    noteOwnSend(t.connectionId, t.externalId, content);
     let externalMessageId: string | null = null;
     if (t.platform === "whatsapp") externalMessageId = await wa.sendWhatsapp(t.connectionId, t.externalId, content);
     else if (t.platform === "telegram") externalMessageId = await tg.sendTelegram(t.connectionId, t.externalId, content);
@@ -219,7 +227,7 @@ async function deliverOne(userId: string, t: SendTarget, content: string): Promi
     await channelMessages()
       .insertOne({
         _id: uid(), userId, connectionId: t.connectionId, platform: t.platform, destinationId: t.externalId,
-        destinationName: t.name, externalId: `out:${externalMessageId ?? uid()}`, senderName: "You (via RelayFlow)",
+        destinationName: t.name, externalId: messageKey(t.externalId, externalMessageId ?? `out-${uid()}`), senderName: "You (via RelayFlow)",
         direction: "outbound", text: content, occurredAt: new Date(), createdAt: new Date(),
       })
       .catch(() => undefined);

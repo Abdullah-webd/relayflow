@@ -61,14 +61,16 @@ export async function recordMessage(m: {
   direction: "inbound" | "outbound";
   text: string;
   occurredAt: Date;
-}): Promise<void> {
+}): Promise<boolean> {
+  // Returns true only when this message is new (first time we've stored it).
   try {
-    await channelMessages().updateOne(
+    const res = await channelMessages().updateOne(
       { connectionId: m.connectionId, externalId: m.externalId },
       { $setOnInsert: { _id: uid(), ...m, createdAt: new Date() } },
       { upsert: true },
     );
+    return res.upsertedCount > 0;
   } catch {
-    // duplicate — ignore
+    return false; // duplicate (race) — already stored
   }
 }
