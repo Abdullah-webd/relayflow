@@ -36,7 +36,7 @@ Never deploy these blind (a WhatsApp identity change once took WhatsApp down for
 ## Other standing rules
 - Commits: no AI co-author trailers.
 - Design: white page backgrounds; brand = logo blue (`brand-600` #0566E0 for buttons, #0573FE logo blue);
-  logo assets in `src/web/public/` (`logo.png`, `logo-mark.png`). Use the `premium-ui` skill for UI work.
+  logo assets in `src/web/public/` (`logo.png`, `logo-mark.png`). Use the `motion-web` skill for UI work (landing = dial 7, app screens = dial 4).
 - Only one server may run channel sessions (`src/server/runtime/leader.ts`); never bypass the lock.
 - SEO: per-page titles/descriptions live in `src/shared/seo.ts`; canonical host is `userelayflow.com`.
 - Secrets never go in code or chat logs; Railway variables are set by the owner when they are secrets.
