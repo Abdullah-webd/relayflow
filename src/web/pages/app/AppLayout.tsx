@@ -21,7 +21,9 @@ import {
   Search,
   CornerDownLeft,
   Plus,
+  LifeBuoy,
 } from "lucide-react";
+import { api } from "../../lib/api";
 
 function timeLeft(ms: number): string {
   const mins = Math.max(0, Math.floor(ms / 60_000));
@@ -87,6 +89,7 @@ const GROUPS = [
     items: [
       { to: "/app/connections", label: "Connections", icon: Plug },
       { to: "/app/settings", label: "Settings", icon: Gear },
+      { to: "/app/reports", label: "Report a problem", icon: LifeBuoy },
     ],
   },
 ];
@@ -98,7 +101,31 @@ const COMMANDS = [
   { label: "New monitor", to: "/app/monitors?new=1", icon: Plus, hint: "Action" },
   { label: "New schedule", to: "/app/schedules?new=1", icon: Plus, hint: "Action" },
   { label: "Connect a channel", to: "/app/connections", icon: Plug, hint: "Action" },
+  { label: "Report a problem", to: "/app/reports", icon: LifeBuoy, hint: "Action" },
 ];
+
+const TRACKED = new Set(["overview", "chat", "auto-replies", "monitors", "schedules", "connections", "settings", "reports"]);
+
+/**
+ * Anonymous-to-others usage signal for the admin console: which tab is open and for how long
+ * (a ping on each tab switch, then every 30s while the page is visible). Never message content.
+ */
+function useUsageTracking(section: string) {
+  useEffect(() => {
+    if (!TRACKED.has(section)) return;
+    if (section !== "reports") {
+      try {
+        sessionStorage.setItem("rf_last_section", section); // pre-fills "Where in RelayFlow?" on Report
+      } catch {
+        /* ignore */
+      }
+    }
+    const ping = (seconds: number) => api("/track", { method: "POST", body: JSON.stringify({ section, seconds }) }).catch(() => undefined);
+    ping(0);
+    const t = setInterval(() => document.visibilityState === "visible" && ping(30), 30_000);
+    return () => clearInterval(t);
+  }, [section]);
+}
 
 /** ⌘K: jump to any page or start any action from the keyboard. */
 function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -190,6 +217,7 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
+  useUsageTracking(section);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

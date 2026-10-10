@@ -39,6 +39,8 @@ export interface User {
   compAccess?: boolean; // complimentary access granted by the owner
   termsAcceptedAt?: Date | null; // when the user agreed to the Terms + Privacy Policy
   termsVersion?: string | null; // which version they agreed to (src/server/legal.ts)
+  lastSeenAt?: Date | null; // last dashboard heartbeat (admin "online now")
+  lastSection?: string | null; // dashboard tab they were on
   createdAt: Date;
   updatedAt: Date;
 }
@@ -253,6 +255,54 @@ export interface AutoReply {
   createdAt: Date;
 }
 
+// A problem reported by a user from the dashboard's Report tab.
+export type ReportStatus = "open" | "in_progress" | "resolved";
+export type ReportCategory = "bug" | "connection" | "billing" | "feature" | "other";
+export interface Report {
+  _id: string;
+  userId: string;
+  email: string;
+  name: string | null;
+  category: ReportCategory;
+  title: string;
+  description: string;
+  page: string | null; // dashboard tab it's about
+  screenshot: string | null; // small JPEG/PNG data URL (resized in the browser)
+  context: { userAgent: string; viewport: string; plan: string; channels: string[] };
+  status: ReportStatus;
+  adminReply: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  resolvedAt: Date | null;
+}
+
+// Dashboard usage, one row per user per UTC day per tab: views and active seconds.
+export interface UsageDaily {
+  _id: string; // `${userId}|${day}|${section}`
+  userId: string;
+  day: string; // YYYY-MM-DD (UTC)
+  section: string;
+  views: number;
+  seconds: number;
+  updatedAt: Date;
+}
+
+export interface AdminSession {
+  _id: string;
+  tokenHash: string;
+  email: string;
+  ip: string;
+  createdAt: Date;
+  expiresAt: Date;
+}
+export interface AdminLoginAttempt {
+  _id: string;
+  ip: string;
+  email: string;
+  ok: boolean;
+  at: Date;
+}
+
 // Baileys auth-state key/value store (encrypted), keyed by connection.
 export interface WhatsAppAuth {
   _id: string; // `${connectionId}:${keyId}`
@@ -295,6 +345,10 @@ export const responders = () => db().collection<Responder>("responders");
 export const knowledgeDocs = () => db().collection<KnowledgeDoc>("knowledge_docs");
 export const autoReplies = () => db().collection<AutoReply>("auto_replies");
 export const whatsappAuth = () => db().collection<WhatsAppAuth>("whatsapp_auth");
+export const reports = () => db().collection<Report>("reports");
+export const usageDaily = () => db().collection<UsageDaily>("usage_daily");
+export const adminSessions = () => db().collection<AdminSession>("admin_sessions");
+export const adminLoginAttempts = () => db().collection<AdminLoginAttempt>("admin_login_attempts");
 export const appConfig = () => db().collection<AppConfig>("app_config");
 export interface Lock {
   _id: string;
@@ -350,6 +404,14 @@ async function ensureIndexes(d: Db): Promise<void> {
   await safeIndex(d, "responders", { userId: 1 });
   await safeIndex(d, "auto_replies", { userId: 1, createdAt: -1 });
   await safeIndex(d, "whatsapp_auth", { connectionId: 1 });
+  await safeIndex(d, "reports", { userId: 1, createdAt: -1 });
+  await safeIndex(d, "reports", { status: 1, createdAt: -1 });
+  await safeIndex(d, "usage_daily", { day: 1 });
+  await safeIndex(d, "usage_daily", { userId: 1, day: 1 });
+  await safeIndex(d, "admin_sessions", { tokenHash: 1 }, { unique: true });
+  await safeIndex(d, "admin_sessions", { expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await safeIndex(d, "admin_login_attempts", { at: 1 }, { expireAfterSeconds: 60 * 60 * 24 });
+  await safeIndex(d, "users", { lastSeenAt: -1 });
 }
 
 export type { ObjectId, Collection };

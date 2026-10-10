@@ -14,6 +14,17 @@ Object.assign(process.env, {
   SLACK_SIGNING_SECRET: "test-signing-secret",
   GMAIL_ENABLED: "false",
 });
+// Test-only admin login (the real credentials are never used by tests).
+import crypto from "node:crypto";
+import { TEST_ADMIN } from "./admin-creds";
+export { TEST_ADMIN };
+// USE_REAL_ADMIN=1 (local demo only) keeps the real admin login from .env instead.
+if (process.env.USE_REAL_ADMIN !== "1") {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.scryptSync(TEST_ADMIN.password, salt, 64, { N: 2 ** 15, r: 8, p: 1, maxmem: 64 * 1024 * 1024 });
+  process.env.ADMIN_EMAIL = TEST_ADMIN.email;
+  process.env.ADMIN_PASSWORD_HASH = `scrypt:${salt.toString("hex")}:${hash.toString("hex")}`;
+}
 if (process.env.TEST_AI !== "1") process.env.OPENAI_API_KEY = ""; // AI calls only in `npm run test:ai`
 export const TEST_DB = DB;
 export const API = `http://localhost:${process.env.PORT}`;

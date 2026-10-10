@@ -33,3 +33,11 @@ Start for tests: `npm run build`, then the harnesses start the server themselves
 
 ## Known non-issues
 - Visitors call `/api/auth/me` on every page; it answers `{ user: null }` (200), not an error.
+
+## Report tab + admin console
+- Users report problems at /app/reports; the owner gets an email; the admin console shows them live.
+- Admin console: /admin (own login: ADMIN_EMAIL + ADMIN_PASSWORD_HASH env vars; make them with
+  `npx tsx scripts/admin-password.ts <email> <file>`). Without both set, /admin says sign-in isn't set up.
+- Tests use a separate test admin login (scripts/test/admin-creds.ts), never the real one.
+- Local demo with the real admin login: `USE_REAL_ADMIN=1 TEST_DB_NAME=relayflow_demo_test TEST_PORT=8790 npx tsx scripts/test/serve.ts`
+- Admin screenshots (test login): `SHOTS_URL=http://localhost:8791 npx tsx scripts/test/admin-shots.ts`

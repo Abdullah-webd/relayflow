@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import fs from "node:fs";
+import { TEST_ADMIN } from "../scripts/test/admin-creds";
 
 // Critical flows, clicked through like a real user. Tests marked "seeded" need the local test
 // database (accounts from scripts/test/e2e-seed.ts) and are skipped against the live site.
@@ -135,6 +136,50 @@ test.describe("dashboard (seeded accounts)", () => {
     await page.getByRole("link", { name: "All auto-replies" }).click();
     await expect(page.getByText("Shop FAQs")).toBeVisible();
     expect(errors).toEqual([]);
+  });
+
+  test("report a problem, then the admin replies and resolves it, and the user sees it", async ({ page, browser }) => {
+    const errors = collectErrors(page);
+    await signInAs(page, "trial");
+    await page.goto("/app/reports");
+    await page.getByRole("radio", { name: "Channel connection" }).click();
+    await page.getByLabel("Short summary").fill("Telegram code never arrives");
+    await page.getByLabel("What happened?").fill("I enter my number but the login code never comes.");
+    await page.getByRole("button", { name: "Send report" }).click();
+    await expect(page.getByText("Thanks, we've got your report")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Telegram code never arrives/ })).toBeVisible();
+
+    // Admin, in a separate browser session.
+    const admin = await (await browser.newContext()).newPage();
+    await admin.goto("/admin");
+    await admin.getByLabel("Email").fill(TEST_ADMIN.email);
+    await admin.getByLabel("Password", { exact: true }).fill("not-the-password");
+    await admin.getByRole("button", { name: "Sign in" }).click();
+    await expect(admin.getByRole("alert")).toContainText("don't match");
+    await admin.getByLabel("Password", { exact: true }).fill(TEST_ADMIN.password);
+    await admin.getByRole("button", { name: "Sign in" }).click();
+    await expect(admin).toHaveURL(/\/admin\/overview$/, { timeout: 15_000 }); // the test DB is remote: sign-in can take a few seconds
+    await expect(admin.getByText("Open reports")).toBeVisible();
+    await admin.getByRole("link", { name: /Reports/ }).click();
+    await admin.getByRole("button", { name: /Telegram code never arrives/ }).click();
+    await admin.getByLabel(/Reply to/).fill("Fixed: codes now arrive within a minute.");
+    await admin.getByRole("button", { name: "Reply and resolve" }).click();
+    await expect(admin.getByText("Replied and marked resolved")).toBeVisible();
+
+    // The user's tab picks it up on its own (polls every 20s); reload to check now.
+    await page.reload();
+    await page.getByRole("button", { name: /Telegram code never arrives/ }).click();
+    await expect(page.getByText("Resolved").first()).toBeVisible();
+    await expect(page.getByText("Fixed: codes now arrive within a minute.")).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test("admin console: users can't get in without the admin password", async ({ page }) => {
+    await signInAs(page, "trial");
+    await page.goto("/admin/users");
+    await expect(page.getByRole("heading", { name: "Sign in to the console" })).toBeVisible();
+    const res = await page.request.get("/api/admin/users");
+    expect(res.status()).toBe(401);
   });
 
   test("expired trial is sent to the paywall", async ({ page }) => {

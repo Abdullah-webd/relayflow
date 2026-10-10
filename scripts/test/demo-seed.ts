@@ -102,5 +102,70 @@ await scheduledTasks().insertMany([
 
 await chats().insertMany(["Who asked about delivery today?", "Wholesale buyers follow-up", "Send Sunday opening notice"].map((title, i) => ({ _id: `demo-chat-${i}`, userId: uid, title, createdAt: new Date(now - i * 5 * H), updatedAt: new Date(now - i * 5 * H) })) as any);
 
+// ---- A small population for the admin console: sign-ups, plans, usage, reports ----
+const { usageDaily, reports } = await import("../../src/server/db");
+const first = ["Tolu", "Bola", "Chidi", "Ngozi", "Emeka", "Funke", "Ada", "Kunle", "Ifeoma", "Segun", "Zainab", "Yusuf", "Kemi", "Obinna", "Halima", "Dayo", "Uche", "Femi", "Amina", "Tunde", "Nkechi", "Ibrahim"];
+const sections = ["overview", "chat", "auto-replies", "monitors", "schedules", "connections", "settings"];
+const weights = [5, 9, 4, 2, 1, 3, 1];
+const D = 24 * H;
+const demoUsers = first.map((name, i) => {
+  const kind = i % 7 === 0 ? "pro" : i % 5 === 0 ? "starter" : i % 3 === 0 ? "ended" : "trial";
+  const created = new Date(now - ((i * 37) % 29) * D - (i % 5) * H);
+  return {
+    _id: `demo-u${i}`,
+    email: `${name.toLowerCase()}@example.com`,
+    name: `${name} ${["Adeyemi", "Okafor", "Bello", "Eze", "Musa", "Ogunleye"][i % 6]}`,
+    passwordHash: "x",
+    emailVerified: i % 9 !== 4,
+    timezone: "Africa/Lagos",
+    subscriptionStatus: kind === "trial" || kind === "ended" ? "trialing" : "active",
+    plan: kind === "starter" ? "starter" : kind === "pro" ? "pro" : null,
+    stripeSubscriptionId: kind === "pro" || kind === "starter" ? `sub_demo_${i}` : null,
+    trialSource: "app",
+    trialStartedAt: created,
+    trialEndsAt: kind === "trial" ? new Date(now + (6 + i) * H) : new Date(+created + D),
+    currentPeriodEnd: kind === "pro" || kind === "starter" ? new Date(now + (3 + i) * D) : null,
+    cancelAtPeriodEnd: i === 10,
+    lastSeenAt: i < 3 ? new Date(now - (i + 1) * 20_000) : new Date(now - ((i * 13) % 70) * H),
+    lastSection: sections[i % sections.length],
+    createdAt: created,
+    updatedAt: new Date(),
+  };
+});
+await users().insertMany(demoUsers as any);
+await users().updateOne({ _id: uid }, { $set: { lastSeenAt: new Date(now - 5_000), lastSection: "overview" } });
+const usageRows = [];
+for (const u of [{ _id: uid, createdAt: new Date(now - 6 * D) }, ...demoUsers]) {
+  for (let d = 0; d < 30; d++) {
+    const at = new Date(now - d * D);
+    if (at < u.createdAt) continue;
+    const seed = (u._id.length * 7 + d * 13) % 10;
+    if (seed > 5) continue; // not every user every day
+    const day = at.toISOString().slice(0, 10);
+    sections.forEach((sec, si) => {
+      if ((seed + si) % 3 === 0) return;
+      usageRows.push({ _id: `${u._id}|${day}|${sec}`, userId: u._id, day, section: sec, views: 1 + ((seed + si) % 4), seconds: weights[si] * 30 * (1 + ((seed * si) % 5)), updatedAt: at });
+    });
+  }
+}
+await usageDaily().insertMany(usageRows as any);
+await connections().insertMany([
+  { _id: "demo-c-u1", userId: "demo-u1", platform: "whatsapp", status: "connected", displayName: "+234 802 000 0001" },
+  { _id: "demo-c-u2", userId: "demo-u2", platform: "whatsapp", status: "error", displayName: "+234 802 000 0002", lastError: "WhatsApp signed RelayFlow out. Reconnect WhatsApp to continue." },
+  { _id: "demo-c-u3", userId: "demo-u3", platform: "telegram", status: "connected", displayName: "Ngozi Eze" },
+  { _id: "demo-c-u7", userId: "demo-u7", platform: "slack", status: "connected", displayName: "Kunle Studio" },
+].map((c) => ({ externalId: null, encryptedCredentials: null, lastError: null, heartbeatAt: new Date(), createdAt: new Date(), updatedAt: new Date(now - 3 * H), ...c })) as any);
+const rep = (i: number, userId: string, email: string, name: string, category: string, title: string, description: string, page: string | null, status: string, ago: number, adminReply: string | null = null) => ({
+  _id: `demo-r${i}`, userId, email, name, category, title, description, page, screenshot: null,
+  context: { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Safari/604.1", viewport: "390x844", plan: "pro (trialing)", channels: ["whatsapp: connected"] },
+  status, adminReply, createdAt: new Date(now - ago), updatedAt: new Date(now - ago), resolvedAt: status === "resolved" ? new Date(now - ago / 2) : null,
+});
+await reports().insertMany([
+  rep(1, "demo-u2", "bola@example.com", "Bola Okafor", "connection", "WhatsApp keeps disconnecting", "It shows Needs reconnecting every evening around 8pm. I reconnect and it works until the next day.", "connections", "open", 4 * 60_000),
+  rep(2, "demo-u5", "funke@example.com", "Funke Ogunleye", "billing", "Charged twice this month", "I see two charges of $30 on my card for October.", "settings", "in_progress", 3 * H),
+  rep(3, uid, "demo@relayflow.test", "Amaka Obi", "feature", "Let auto-replies send pictures", "Customers ask for photos of products. It would help if the auto-reply could send the product photo.", "auto-replies", "open", 9 * H),
+  rep(4, "demo-u8", "ifeoma@example.com", "Ifeoma Adeyemi", "bug", "Chat stuck on Working on it", "I asked for a summary of my groups and it kept spinning for minutes.", "chat", "resolved", 30 * H, "Thanks Ifeoma, this is fixed. Summaries now finish in a few seconds."),
+] as any);
+
 console.log("demo ready: demo@relayflow.test / demo-password");
 process.exit(0);

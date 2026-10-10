@@ -16,6 +16,8 @@ import { taskRoutes } from "./routes/tasks";
 import { monitorRoutes } from "./routes/monitors";
 import { autoReplyRoutes } from "./routes/autoReplies";
 import { overviewRoutes } from "./routes/overview";
+import { reportRoutes } from "./routes/reports";
+import { adminRoutes } from "./routes/admin";
 import { billingRoutes, stripeWebhookHandler } from "./routes/billing";
 import { resumeConnections, stopConnections } from "./connectors/manager";
 import { runAsLeader, releaseLeadership } from "./runtime/leader";
@@ -30,6 +32,9 @@ async function main() {
   const app = Fastify({
     logger: { level: env.isProd ? "info" : "warn" },
     bodyLimit: 8 * 1024 * 1024,
+    // Railway's edge proxy adds the visitor's address; trust exactly that one hop so req.ip is
+    // the real client (per-visitor rate limits, admin login lockout) and can't be spoofed.
+    trustProxy: (_address: string, hop: number) => hop === 0,
   });
 
   registerCanonicalHost(app); // first, so it covers every route
@@ -64,6 +69,8 @@ async function main() {
   await app.register(monitorRoutes, { prefix: "/api" });
   await app.register(autoReplyRoutes, { prefix: "/api" });
   await app.register(overviewRoutes, { prefix: "/api" });
+  await app.register(reportRoutes, { prefix: "/api" });
+  await app.register(adminRoutes, { prefix: "/api" });
 
   // Serve the built React app in production (single Railway service). `index: false` so every
   // page — including "/" — goes through the SEO handler that writes per-page head tags.

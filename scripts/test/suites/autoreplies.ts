@@ -16,6 +16,25 @@ async function mkGroup(userId: string, conn: string, ext: string, name: string, 
   return id;
 }
 const json = (b: unknown) => JSON.stringify(b);
+/** A minimal one-page PDF containing `text` (valid xref offsets, standard Helvetica). */
+function tinyPdf(text: string): Buffer {
+  const stream = `BT /F1 12 Tf 72 720 Td (${text.replace(/[()\\]/g, "")}) Tj ET`;
+  const objs = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let out = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objs.forEach((o, i) => { offsets.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, "0")} 00000 n \n`).join("")}`;
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(out, "latin1");
+}
+
 
 export default async function autoreplies() {
   suite("Auto-replies: separate groups, knowledge and rules");
@@ -37,10 +56,12 @@ export default async function autoreplies() {
   await api(`/api/auto-replies/${b}/docs`, { method: "POST", token, body: json({ title: "Club", source: "text", text: "Runs start at 6am on Saturdays." }) });
   r = await api(`/api/auto-replies/${a}`, { method: "PATCH", token, body: json({ active: true }) });
   check("goes live with groups + knowledge", r.status === 200);
+  const up = await api(`/api/auto-replies/${b}/docs`, { method: "POST", token, body: json({ title: "Club PDF", source: "pdf", dataBase64: tinyPdf("Membership costs N5,000 a month").toString("base64") }) });
+  check("PDF upload extracts its text", up.status === 200 && up.body.doc?.chars > 10 && /N5,000/.test((await knowledgeDocs().findOne({ _id: up.body.doc?.id }))?.text || ""), `${up.status} ${up.body.detail || ""}`);
 
   let list = (await api("/api/auto-replies", { token })).body;
   const A = list.responders.find((x: any) => x.id === a);
-  check("each auto-reply keeps its own knowledge", A?.docs.length === 1 && A.docs[0].title === "Prices" && list.responders.find((x: any) => x.id === b)?.docs[0]?.title === "Club");
+  check("each auto-reply keeps its own knowledge", A?.docs.length === 1 && A.docs[0].title === "Prices" && list.responders.find((x: any) => x.id === b)?.docs.some((d: any) => d.title === "Club"));
   check("each auto-reply keeps its own rules", A?.instructions === "Never discuss refunds.");
   check("other people's groups are ignored", A?.destinationIds.join() === shop);
   check("live auto-reply switches its group on", (await destinations().findOne({ _id: shop }))?.autoReplyEnabled === true && (await destinations().findOne({ _id: club }))?.autoReplyEnabled !== true);

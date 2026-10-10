@@ -5,6 +5,7 @@ import { uid } from "../lib/crypto";
 import { requireActivePlan } from "../auth/context";
 import { ensureLegacyResponder, getResponderContext, syncResponderDestinations } from "../knowledge/knowledge";
 import { decideReply } from "../knowledge/autoReply";
+import { extractPdfText } from "../knowledge/pdf";
 import { requireProFeature } from "../billing/access";
 
 const MAX_RESPONDERS = 25;
@@ -192,10 +193,7 @@ export async function autoReplyRoutes(app: FastifyInstance) {
     if (parsed.data.source === "pdf") {
       if (!parsed.data.dataBase64) return reply.code(400).send({ error: "invalid_input", detail: "Missing PDF data." });
       try {
-        const mod: any = await import("pdf-parse");
-        const pdfParse = mod.default || mod;
-        const out = await pdfParse(Buffer.from(parsed.data.dataBase64, "base64"));
-        text = String(out.text || "").replace(/\n{3,}/g, "\n\n").trim();
+        text = await extractPdfText(Buffer.from(parsed.data.dataBase64, "base64"));
       } catch (error) {
         return reply.code(400).send({ error: "pdf_failed", detail: `Couldn't read that PDF: ${(error as Error).message}` });
       }

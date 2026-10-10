@@ -42,7 +42,7 @@ export function renderShell(template: string, pathname: string, meta: RouteMeta)
 }
 
 export function robotsTxt(): string {
-  return ["User-agent: *", "Allow: /", "Disallow: /app", "Disallow: /api/", "", `Sitemap: ${SITE_URL}/sitemap.xml`, ""].join("\n");
+  return ["User-agent: *", "Allow: /", "Disallow: /app", "Disallow: /admin", "Disallow: /api/", "", `Sitemap: ${SITE_URL}/sitemap.xml`, ""].join("\n");
 }
 
 export function sitemapXml(lastmod = new Date().toISOString().slice(0, 10)): string {

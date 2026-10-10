@@ -75,6 +75,11 @@ export const env = {
   // Set PAYWALL_DISABLED=true to open the app; remove it (or set false) to enforce the
   // paywall — no code changes needed.
   paywallDisabled: str("PAYWALL_DISABLED").toLowerCase() === "true",
+
+  // Admin console (/admin). Login is disabled unless both are set. The hash comes from
+  // `npx tsx scripts/admin-password.ts` (scrypt; the password itself is never stored).
+  adminEmail: str("ADMIN_EMAIL").trim().toLowerCase(),
+  adminPasswordHash: str("ADMIN_PASSWORD_HASH").trim(),
 };
 
 export type Env = typeof env;

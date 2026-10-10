@@ -19,8 +19,11 @@ import Overview from "./pages/app/Overview";
 import AutoReplies from "./pages/app/AutoReplies";
 import Monitors from "./pages/app/Monitors";
 import Schedules from "./pages/app/Schedules";
+import Reports from "./pages/app/Reports";
 import Settings from "./pages/app/Settings";
-import { type ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
+// The admin console is its own bundle: regular users never download it.
+const AdminApp = lazy(() => import("./pages/admin/AdminApp"));
 
 function FullLoader() {
   return (
@@ -87,11 +90,20 @@ export default function App() {
         <Route path="auto-replies/:id?" element={<AutoReplies />} />
         <Route path="monitors" element={<Monitors />} />
         <Route path="schedules" element={<Schedules />} />
+        <Route path="reports" element={<Reports />} />
         {/* Old addresses (bookmarks, emails) keep working. */}
         <Route path="knowledge" element={<Navigate to="/app/auto-replies" replace />} />
         <Route path="tasks" element={<Navigate to="/app/schedules" replace />} />
         <Route path="settings" element={<Settings />} />
       </Route>
+      <Route
+        path="/admin/*"
+        element={
+          <Suspense fallback={<FullLoader />}>
+            <AdminApp />
+          </Suspense>
+        }
+      />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

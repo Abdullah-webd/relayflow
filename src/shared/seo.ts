@@ -46,6 +46,7 @@ export const ROUTE_META: Record<string, RouteMeta> = {
 };
 
 export const APP_META: RouteMeta = { title: "RelayFlow", description: DEFAULT_DESC, index: false };
+export const ADMIN_META: RouteMeta = { title: "RelayFlow Admin", description: "RelayFlow admin console.", index: false };
 export const NOT_FOUND_META: RouteMeta = { title: "Page not found — RelayFlow", description: DEFAULT_DESC, index: false };
 
 /** Metadata for a path, or null when the path isn't a real page (→ 404). */
@@ -53,6 +54,7 @@ export function metaFor(pathname: string): RouteMeta | null {
   const path = pathname.replace(/\/+$/, "") || "/";
   if (ROUTE_META[path]) return ROUTE_META[path];
   if (path === "/app" || path.startsWith("/app/")) return APP_META;
+  if (path === "/admin" || path.startsWith("/admin/")) return ADMIN_META;
   return null;
 }
 
